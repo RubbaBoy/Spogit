@@ -1,7 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:collection/collection.dart';
+import 'dart:typed_data';
+
 final env = Platform.environment;
+
+final listEquals = ListEquality().equals;
+
+final mapEquals = MapEquality().equals;
 
 String get userHome => {
   Platform.isMacOS: env['HOME'],
@@ -44,4 +51,24 @@ extension PathStuff on List<dynamic> {
   File get file => File(separatorFix);
 
   Directory get directory => Directory(separatorFix);
+}
+
+Uint8List fromMatcher(List data) {
+//  var res = <int>[];
+//  for (var value in data) {
+//    if (value is String) {
+//      value = value.codeUnitAt(0);
+//    }
+//    res.add(value);
+//  }
+//
+  return Uint8List.fromList(
+      List<int>.of(data.map((value) => value is String ? value.codeUnitAt(0) : value))
+          .toList());
+}
+
+extension ASCIIShit on int {
+  bool get isASCII => (this == 10 || this == 13 || (this >= 32 && this <= 126));
+
+  bool get isNotASCII => !isASCII;
 }
