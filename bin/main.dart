@@ -25,5 +25,5 @@ Future<void> main(List<String> args) async {
 
   print('Running as daemon');
 
-  await authenticate();
+  await startDaemon(path);
 }

@@ -12,6 +12,10 @@ dependencies:
   spotify: ^0.3.0
   oauth2: ^1.5.0
   shelf: ^0.7.5
+  http: ^0.12.0+4
+  webdriver: ^2.1.2
+  logging: ^0.11.4
+  crypto: ^2.1.4
 #  path: ^1.6.0
 
 dev_dependencies:

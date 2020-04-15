@@ -10,7 +10,7 @@ import 'package:shelf/shelf_io.dart';
 
 import 'utility.dart';
 
-final tokenUrl = Uri.parse('https://accounts.spotify.com/api/token');
+final tokenUrl = Uri.parse('http://localhost:8080/altRefresh');
 
 class AuthRetriever {
 
@@ -32,6 +32,8 @@ class AuthRetriever {
     print('If a browser has not been opened, go to:\n$url');
 
     var creds = await _listenForCreds(port);
+
+    print('creds = $creds');
 
     return TrackedCredentials(creds['access_token'],
         creds['refresh_token'],
