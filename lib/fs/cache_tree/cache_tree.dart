@@ -1,7 +1,7 @@
 import 'package:Spogit/utility.dart';
 
-class SpotifyPlaylist extends SpotifyEntity {
-  SpotifyPlaylist(String id) : super(id);
+class CachedPlaylist extends CachedEntity {
+  CachedPlaylist(String id, CachedFolder parent) : super(id, parent);
 
   @override
   String print(int indentation) => '${'  ' * indentation} $id';
@@ -9,7 +9,34 @@ class SpotifyPlaylist extends SpotifyEntity {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-          other is SpotifyPlaylist &&
+          other is CachedPlaylist &&
+              runtimeType == other.runtimeType &&
+              id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'Playlist[#$id]';
+}
+
+class CachedFolder extends CachedEntity {
+  final List<CachedEntity> children = [];
+  final String name;
+
+  CachedFolder([String id, CachedFolder parent, this.name]) : super(id, parent);
+
+  @override
+  String print(int indentation) => """${'  ' * indentation} $name ($id)
+${children.map((entity) => entity.print(indentation + 2)).join('\n')}""";
+
+  @override
+  String toString() => 'Folder[#$id]';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          other is CachedFolder &&
               runtimeType == other.runtimeType &&
               id == other.id;
 
@@ -17,36 +44,21 @@ class SpotifyPlaylist extends SpotifyEntity {
   int get hashCode => id.hashCode;
 }
 
-class SpotifyFolder extends SpotifyEntity {
-  final List<SpotifyEntity> children = [];
-  final String name;
-  final SpotifyFolder parent;
-
-  SpotifyFolder([String id, this.name, this.parent]) : super(id);
-
-  @override
-  String print(int indentation) => """${'  ' * indentation} $name ($id)
-${children.map((entity) => entity.print(indentation + 2)).join('\n')}""";
-
-  @override
-  String toString() => print(0);
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-          other is SpotifyFolder &&
-              runtimeType == other.runtimeType &&
-              listEquals(children, other.children) &&
-              id == other.id;
-
-  @override
-  int get hashCode => children.hashCode ^ id.hashCode;
-}
-
-abstract class SpotifyEntity {
+abstract class CachedEntity {
   final String id;
+  final CachedFolder parent;
 
-  SpotifyEntity(this.id);
+  List<CachedFolder> get parents {
+    var res = <CachedFolder>[];
+    var last = parent;
+    while (last?.id != null) {
+      res.add(last);
+      last = last.parent;
+    }
+    return res;
+  }
+
+  CachedEntity(this.id, this.parent);
 
   String print(int indentation);
 
@@ -54,9 +66,9 @@ abstract class SpotifyEntity {
   String toString() => id;
 }
 
-extension EntityFlatten on List<SpotifyEntity> {
-  List<SpotifyPlaylist> get flattenPlaylists =>
-      List<SpotifyPlaylist>.of(expand((entity) => entity is SpotifyFolder
+extension EntityFlatten on List<CachedEntity> {
+  List<CachedPlaylist> get flattenPlaylists =>
+      List<CachedPlaylist>.of(expand((entity) => entity is CachedFolder
           ? entity.children.flattenPlaylists
           : [entity])).toList();
 }

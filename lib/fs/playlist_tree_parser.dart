@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:Spogit/fs/cache_tree/cache_tree.dart';
 import 'package:Spogit/utility.dart';
 
-Stream<List<SpotifyEntity>> getFolders() {
-  final controller = StreamController<List<SpotifyEntity>>.broadcast();
+Stream<List<CachedEntity>> getFolders() {
+  final controller = StreamController<List<CachedEntity>>.broadcast();
 
   var cache = Directory(r'C:\Users\RubbaBoy\AppData\Local\Spotify\Storage');
 
@@ -33,7 +33,7 @@ Stream<List<SpotifyEntity>> getFolders() {
   return controller.stream;
 }
 
-Future<List<SpotifyEntity>> parseFolders(Uint8List data) async {
+Future<List<CachedEntity>> parseFolders(Uint8List data) async {
   var bytes = stripList(data);
 
   var parsed = String.fromCharCodes(bytes)
@@ -41,16 +41,16 @@ Future<List<SpotifyEntity>> parseFolders(Uint8List data) async {
       .skip(1)
       .map((line) => line.substring(0, line.length - 1).split(':'));
 
-  var root = SpotifyFolder();
+  var root = CachedFolder();
   var current = root;
 
   for (var value in parsed) {
     var id = value[1];
     <String, Function>{
-      'playlist': () => current.children.add(SpotifyPlaylist(id)),
+      'playlist': () => current.children.add(CachedPlaylist(id, current)),
       'start-group': () {
-        final group = SpotifyFolder(
-            id, Uri.decodeComponent(value[2].replaceAll('+', ' ')), current);
+        final group = CachedFolder(
+            id, current, Uri.decodeComponent(value[2].replaceAll('+', ' ')));
         current.children.add(current = group);
       },
       'end-group': () => current = current.parent

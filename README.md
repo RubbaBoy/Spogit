@@ -13,5 +13,9 @@ The current workflow (Don't pay attention to this, for my own knowledge, this wi
 
 The spotify hooking workflow:
 
-- The program first links to your spotify account
-- Upon changing (optionally creating) of a playlist, the `~/Spogit/*` repo is updated
+- The program reads your Spotify cache and listens for updates
+- Upon changing (or creating) of a playlist, the `~/Spogit/*` repo is updated
+
+Notes:
+
+- Spotify is always updated from the `~/Spogit` directory

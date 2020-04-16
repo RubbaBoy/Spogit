@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -30,6 +31,11 @@ Map<String, dynamic> tryJsonDecode(String json, [dynamic def = const <String, dy
   }
 }
 
+void syncPeriodic(Duration duration, Function callback) {
+  callback();
+  Timer(duration, () async => await syncPeriodic(duration, callback));
+}
+
 extension PathUtil on String {
   String get separatorFix => (startsWith('~') ? '$userHome${substring(1, length)}' : this).replaceAll('/', separator);
 
@@ -46,7 +52,7 @@ extension NumUtil on int {
 }
 
 extension PathStuff on List<dynamic> {
-  String get separatorFix => map((e) => e is File || e is Directory ? e.path : e).join(separator);
+  String get separatorFix => map((e) => (e is File || e is Directory ? e.path : e) as String).where((str) => str.isNotEmpty).join(separator);
 
   File get file => File(separatorFix);
 

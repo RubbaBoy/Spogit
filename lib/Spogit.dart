@@ -13,44 +13,52 @@ import 'utility.dart';
 import 'package:http/http.dart' as http;
 import 'package:Spogit/fs/playlist_tree_parser.dart';
 
-Future<void> startDaemon(Directory path) async {
-  final credentials = await AuthRetriever().getCredentials();
-  final spotify = SpotifyApi.fromClient(Client(credentials));
+class Spogit {
+  final Credentials _credentials;
+  final SpotifyApi _spotify;
+  final User me;
 
-//  (await spotify.playlists.createPlaylist(auserId, playlistName)).
-//
-//  final watcher = FileWatcher(path);
-//
-//  watcher.listenChange((root) {
-//    print('Creates playlist!');
-//  });
+  Spogit._(this._credentials, this._spotify, this.me);
 
-  var me = await spotify.users.me();
+  static Future<Spogit> createSpogit() async {
+    final credentials = await AuthRetriever().getCredentials();
+    final spotify = SpotifyApi.fromClient(Client(credentials));
+    return Spogit._(credentials, spotify, await spotify.users.me());
+  }
 
-  print('me = $me');
+  void startDaemon(Directory path) {
+    final watcher = FileWatcher(path);
 
-  print('rubbaboy = ${me.id} or maybe ${me.displayName}');
+    /// Use the spotify API for stuff
+    watcher.listenSpogit((root) {
+      // Actual files changed spotify:playlist:4T8gh2JVgZoiGFutx04ErJ
+      print('Spogit files have changed.');
+      print(root.playlists.join('\n'));
+    });
 
-  getFolders().listen((entities) {
-    print('\n\n\nUPDATE! ==============================');
-    for (var value in entities) {
-      print(value);
-    }
-    print('--- ============================== ---');
-  });
+    /// Modify files to reflect the Spotify API
+    watcher.listenSpotify((entities) {
+      // Order changed
+      for (var entity in entities) {
+        print('Moved $entity to ${entity.parent}');
+      }
+    }, (entities) {
+      // Playlists changed
+      for (var entity in entities) {
+        print('Modified the contents of $entity');
+      }
+    });
+  }
 
+  /// Creates a fresh playlist, adding it to Spotify
+  void createFresh() {
 
+  }
 
-//  print('Watching $path');
-//  path.watch(recursive: true).listen((event) {
-//    var dir = event.path.directory;
-//
-//
-//
-//    print('[${event.path}] ${event.type}');
-//  });
-
-//  (await spotify.playlists.me.all()).forEach((playlist) {
-//    print('Playlist ${playlist.id} - ${playlist.name} by ${playlist.owner.displayName}');
-//  });
+  /// Creates a Spogit playlist from an existing Spotify playlist. [playlistId]
+  /// is the raw playlist ID.
+  Future<void> createLinked(String playlistId) async {
+    var playlist = await _spotify.users.playlist(me.id, playlistId);
+    print('Creating a linked playlist with ${playlist.name} (${playlist.id})');
+  }
 }

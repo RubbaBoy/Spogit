@@ -4,10 +4,10 @@ import 'package:Spogit/utility.dart';
 
 class ContentType {
   static const ContentType Root = ContentType._('Root');
-  static const ContentType Folder = ContentType._('Folder');
+//  static const ContentType Folder = ContentType._('Folder');
   static const ContentType Playlist = ContentType._('Playlist');
 
-  static const values = <ContentType>[Root, Folder, Playlist];
+  static const values = <ContentType>[Root, Playlist];
 
   final String type;
 
@@ -24,7 +24,6 @@ class ContentType {
       return null;
     }
 
-    print('type = $typeJson');
     return ContentType.values.firstWhere((value) => value.type == typeJson, orElse: () => null);
   }
 
