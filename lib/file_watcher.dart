@@ -45,7 +45,7 @@ class FileWatcher {
     List<CachedEntity> entityTree;
     List<CachedPlaylist> flatPlaylists;
 
-    syncPeriodic(Duration(milliseconds: 1000), () async {
+    syncPeriodic(Duration(milliseconds: 500), () async {
       if (modified) {
         modified = false;
 
@@ -54,7 +54,7 @@ class FileWatcher {
 
         var currFiles = await getPlaylistCache(foundPlaylists);
 
-        var newPlaylists = foundPlaylists.asMap().map((i, playlist) => MapEntry(playlist, (currFiles[playlist])[0].path as String));
+        var newPlaylists = foundPlaylists.asMap().map((i, playlist) => MapEntry(playlist, currFiles[playlist]?.elementAt(0)?.path as String));
 
         cacheFile = entities.key.path;
 

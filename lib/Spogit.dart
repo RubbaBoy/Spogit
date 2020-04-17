@@ -1,17 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:Spogit/auth_retriever.dart';
 import 'package:Spogit/file_watcher.dart';
-import 'package:Spogit/url_browser.dart';
 import 'package:oauth2/oauth2.dart';
-import 'package:shelf/shelf.dart';
-import 'package:shelf/shelf_io.dart';
 import 'package:spotify/spotify.dart';
-import 'utility.dart';
-import 'package:http/http.dart' as http;
-import 'package:Spogit/fs/playlist_tree_parser.dart';
 
 class Spogit {
   final Credentials _credentials;
