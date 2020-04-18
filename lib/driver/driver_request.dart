@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver_utility.dart';
+import 'package:Spogit/utility.dart';
 import 'package:webdriver/sync_io.dart';
 
 class RequestManager {
@@ -15,7 +16,7 @@ class RequestManager {
   RequestManager(this._driver, this._communication);
 
   Future<void> initAuth() async {
-    var _authCompleter = Completer<String>();
+    var authCompleter = Completer<String>();
 
     StreamSubscription sub;
     sub = _communication.stream.listen((message) async {
@@ -23,13 +24,12 @@ class RequestManager {
         if (message.value.startsWith('Bearer ')) {
           authToken = message.value.substring(7);
 
-          print('Got token, getting /me data');
           var meResponse = await makeRequest(DriverRequest(
               method: 'GET', uri: Uri.parse('https://api.spotify.com/v1/me')));
-          personalData = PersonalData.fromJson(meResponse.body);
-          print('Hello ${personalData.displayName}!');
 
-          _authCompleter.complete();
+          personalData = PersonalData.fromJson(meResponse.body);
+
+          authCompleter.complete();
 
           await sub?.cancel();
         }
@@ -53,14 +53,14 @@ class RequestManager {
         }
     ''', []);
 
-    (await getElement(_driver, By.cssSelector('a[href="/collection"]'))).click();
+    (await getElement(_driver, By.cssSelector('a[href="/collection"]')))
+        .click();
 
-    return _authCompleter.future;
+    return authCompleter.future;
   }
 
   Future<DriverResponse> makeRequest(DriverRequest request) async {
-    var response =
-        await _driver.executeAsync(request.toJS(authToken), []);
+    var response = await _driver.executeAsync(request.toJS(authToken), []);
     return DriverResponse(response['status'], Map.castFrom(response['body']));
   }
 }
@@ -87,10 +87,14 @@ class DriverRequest {
   DriverRequest({
     this.authed = true,
     this.method = 'POST',
-    this.uri,
+    Uri uri,
     this.body,
     Map<String, String> headers = const {},
-  }) : headers = {
+  })  : uri = uri.replace(queryParameters: {
+          ...{'time': '$now'}, // This is simply to stop Chrome from caching requests
+          ...uri.queryParameters
+        }),
+        headers = {
           ...headers,
           ...{
             'accept': 'application/json',

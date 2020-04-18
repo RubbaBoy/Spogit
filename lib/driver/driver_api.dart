@@ -45,9 +45,16 @@ class DriverAPI {
 //    var res = await playlistManager.movePlaylist(PLAYLIST_111, toGroup: FOLDER_GENERAL, offset: 1);
 
 //    var res = await playlistManager.createFolder('Alrighty', toGroup: FOLDER_FOLD1, offset: 1);
-    var res = await playlistManager.createFolder('Kinda epic', absolutePosition: 0);
 
+    var folder = await playlistManager.createFolder('Anothe router', absolutePosition: 0);
+    var folderId = folder['id'];
+    print('Made folder $folderId');
 
+    var playlist = await playlistManager.createPlaylist('Another inner');
+    var playlistId = playlist['id'];
+    print('Created playlist with ID of $playlistId');
+
+    var moved = await playlistManager.movePlaylist(playlistId, toGroup: folderId);
 
     print('Moved playlist');
   }
