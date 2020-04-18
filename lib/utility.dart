@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
@@ -10,6 +11,8 @@ final env = Platform.environment;
 final listEquals = ListEquality().equals;
 
 final mapEquals = MapEquality().equals;
+
+final random = Random();
 
 String get userHome => {
       Platform.isMacOS: env['HOME'],
@@ -35,6 +38,14 @@ Map<String, dynamic> tryJsonDecode(String json,
 void syncPeriodic(Duration duration, Function callback) {
   callback();
   Timer(duration, () async => await syncPeriodic(duration, callback));
+}
+
+String randomHex(int length) {
+  var res = '';
+  for (var i = 0; i < length / 2; i++) {
+    res += random.nextInt(0xFF).toRadixString(16);
+  }
+  return res;
 }
 
 extension PathUtil on String {
@@ -73,4 +84,13 @@ extension ASCIIShit on int {
   bool get isASCII => (this == 10 || this == 13 || (this >= 32 && this <= 126));
 
   bool get isNotASCII => !isASCII;
+}
+
+void printConsole(Object obj) => print(obj);
+
+extension PrintStuff<T> on T {
+  T print() {
+    printConsole(this);
+    return this;
+  }
 }

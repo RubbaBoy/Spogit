@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
+import 'package:Spogit/driver_utility.dart';
 import 'package:webdriver/sync_io.dart';
 
 void main(List<String> args) {
@@ -15,6 +16,7 @@ const String PLAYLIST_111 = 'spotify:playlist:2RFxTyHARNM8KDpZyamcsx';
 
 const String FOLDER_GENERAL = 'spotify:start-group:20c77c3ea882ff4b:General';
 const String FOLDER_FOLD1 = 'spotify:start-group:231be240b5401a01:fold';
+const String FOLDER_FOLD2 = 'spotify:start-group:c5dd575d299c043a:fold';
 
 class DriverAPI {
   WebDriver driver;
@@ -28,17 +30,24 @@ class DriverAPI {
 
     driver = runner.driver;
 
-    final requestManager = RequestManager(driver);
-
     final communication = await JSCommunication.startCommunication();
 
+    final requestManager = RequestManager(driver, communication);
+
     await getCredentials();
+
+    await requestManager.initAuth();
 
     final playlistManager = await PlaylistManager.createPlaylistManager(driver, requestManager, communication);
 
     print('Initialized everything!');
 
-    var res = await playlistManager.movePlaylist(PLAYLIST_111, toGroup: FOLDER_GENERAL, offset: 1);
+//    var res = await playlistManager.movePlaylist(PLAYLIST_111, toGroup: FOLDER_GENERAL, offset: 1);
+
+//    var res = await playlistManager.createFolder('Alrighty', toGroup: FOLDER_FOLD1, offset: 1);
+    var res = await playlistManager.createFolder('Kinda epic', absolutePosition: 0);
+
+
 
     print('Moved playlist');
   }
@@ -56,7 +65,7 @@ class DriverAPI {
     driver.get(
         'https://accounts.spotify.com/en/login?continue=https:%2F%2Fopen.spotify.com%2F');
 
-    await getElement(By.cssSelector('.Root__main-view'), duration: 20000);
+    await getElement(driver, By.cssSelector('.Root__main-view'), duration: 20000);
 
     print('Logged in!');
 
@@ -95,20 +104,6 @@ class DriverAPI {
 
   void setLocalStorage(String key, String value) => driver.execute(
       'window.localStorage.setItem(arguments[0], arguments[1])', [key, value]);
-
-  Future<WebElement> getElement(By by,
-      {int duration = 5000, int checkInterval = 100}) async {
-    var element;
-    do {
-      try {
-        element = await driver.findElement(by);
-        if (element != null) return element;
-      } catch (_) {}
-      sleep(Duration(milliseconds: checkInterval));
-      duration -= checkInterval;
-    } while (element == null && duration > 0);
-    return element;
-  }
 }
 
 class JsonMessage {

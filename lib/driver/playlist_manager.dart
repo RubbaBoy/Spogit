@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
+import 'package:Spogit/utility.dart';
 import 'package:webdriver/sync_io.dart';
 
 class PlaylistManager {
@@ -9,37 +8,13 @@ class PlaylistManager {
   final RequestManager _requestManager;
   BaseRevision baseRevision;
 
+  String get rootlistUrl =>
+      'https://spclient.wg.spotify.com/playlist/v2/user/${_requestManager.personalData.id}/rootlist';
+
   PlaylistManager._(this._driver, this._requestManager);
 
   static Future<PlaylistManager> createPlaylistManager(WebDriver driver,
       RequestManager requestManager, JSCommunication communication) async {
-    print('Listening to shit');
-
-    communication.stream.listen((message) {
-      if (message.type == 'auth') {
-        if (message.value.startsWith('Bearer ')) {
-          requestManager.authToken = message.value.substring(7);
-        }
-      }
-    });
-
-    driver.execute('''
-        const authSocket = new WebSocket(`ws://localhost:6979`);
-        constantMock = window.fetch;
-        window.fetch = function() {
-            if (arguments.length === 2) {
-                if (arguments[0].startsWith('https://api.spotify.com/')) {
-                    let headers = arguments[1].headers || {};
-                    let auth = headers.authorization;
-                    if (auth != null) {
-                        authSocket.send(JSON.stringify({'type': 'auth', 'value': auth}));
-                    }
-                }
-            }
-            return constantMock.apply(this, arguments)
-        }
-    ''', []);
-
     return PlaylistManager._(driver, requestManager);
   }
 
@@ -47,7 +22,7 @@ class PlaylistManager {
     var response = await _requestManager.makeRequest(DriverRequest(
       method: 'GET',
       uri: Uri.parse(
-          'https://spclient.wg.spotify.com/playlist/v2/user/rubbaboy/rootlist?decorate=revision%2Clength%2Cattributes%2Ctimestamp%2Cowner&market=from_token'),
+          '$rootlistUrl?decorate=revision%2Clength%2Cattributes%2Ctimestamp%2Cowner&market=from_token'),
     ));
 
     if (response.status != 200) {
@@ -64,33 +39,88 @@ class PlaylistManager {
     absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset;
     var fromIndex = baseRevision.getIndexOf(moving);
 
-    var body = {
-      'baseRevision': baseRevision.revision,
-      'deltas': [
-        {
-          'ops': [
-            {
-              'kind': 'MOV',
-              'mov': {
-                'fromIndex': fromIndex,
-                'toIndex': absolutePosition,
-                'length': 1
+    var response = await _requestManager.makeRequest(DriverRequest(
+      uri: Uri.parse(
+          '$rootlistUrl/changes'),
+      body: {
+        'baseRevision': baseRevision.revision,
+        'deltas': [
+          {
+            'ops': [
+              {
+                'kind': 'MOV',
+                'mov': {
+                  'fromIndex': fromIndex,
+                  'toIndex': absolutePosition,
+                  'length': 1
+                }
               }
+            ],
+            'info': {
+              'source': {'client': 'WEBPLAYER'}
             }
-          ],
-          'info': {
-            'source': {'client': 'WEBPLAYER'}
           }
-        }
-      ]
-    };
+        ]
+      },
+    ));
 
-    print('body = ${jsonEncode(body)}');
+    if (response.status != 200) {
+      throw 'Status ${response.status}: ${response.body['error']['message']}';
+    }
+
+    var rev = response.body['revision'];
+    print('Current base revision: $rev');
+    return rev;
+  }
+
+  Future<String> createFolder(String name,
+      {String toGroup, int offset = 0, int absolutePosition}) async {
+    var baseRevision = await analyzeBaseRevision();
+
+    absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset;
+
+    var id = '${randomHex(12)}000';
 
     var response = await _requestManager.makeRequest(DriverRequest(
       uri: Uri.parse(
-          'https://spclient.wg.spotify.com/playlist/v2/user/rubbaboy/rootlist/changes'),
-      body: body,
+          '$rootlistUrl/changes'),
+      body: {
+        'baseRevision': '${baseRevision.revision}',
+        'deltas': [
+          {
+            'ops': [
+              {
+                'kind': 'ADD',
+                'add': {
+                  'fromIndex': absolutePosition,
+                  'items': [
+                    {
+                      'attributes': {'timestamp': now},
+                      'uri':
+                          'spotify:start-group:$id:${Uri.encodeComponent(name)}'
+                    }
+                  ]
+                }
+              },
+              {
+                'kind': 'ADD',
+                'add': {
+                  'fromIndex': absolutePosition + 1,
+                  'items': [
+                    {
+                      'attributes': {'timestamp': now},
+                      'uri': 'spotify:end-group:$id'
+                    }
+                  ]
+                }
+              }
+            ],
+            'info': {
+              'source': {'client': 'WEBPLAYER'}
+            }
+          }
+        ]
+      },
     ));
 
     if (response.status != 200) {
@@ -110,9 +140,10 @@ class BaseRevision {
   BaseRevision.fromJson(Map<String, dynamic> json)
       : revision = json['revision'],
         elements = List<RevisionElement>.from(json['contents']['items']
-            .asMap()
-            .map((i, elem) => MapEntry(i, RevisionElement.fromJson(i, Map<String, dynamic>.from(elem))))
-            .values);
+            ?.asMap()
+            ?.map((i, elem) => MapEntry(i,
+                RevisionElement.fromJson(i, Map<String, dynamic>.from(elem))))
+            ?.values ?? {});
 
   // The element will be inserted BEFORE the given ID. So if you want to add
   // something before the playlist at index 1, you would give it index 1.
@@ -120,9 +151,9 @@ class BaseRevision {
   int getIndexOf(String id) {
     id = RevisionElement.parseId(id);
     return elements
-          .firstWhere((revision) => revision.id == id, orElse: () => null)
-          ?.index ??
-      0;
+            .firstWhere((revision) => revision.id == id, orElse: () => null)
+            ?.index ??
+        0;
   }
 }
 

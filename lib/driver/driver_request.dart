@@ -1,36 +1,66 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:Spogit/driver/js_communication.dart';
+import 'package:Spogit/driver_utility.dart';
 import 'package:webdriver/sync_io.dart';
 
 class RequestManager {
   final WebDriver _driver;
-  Completer<String> _authTokenCompleter;
-  String _authToken;
+  final JSCommunication _communication;
 
-  String get authToken => _authToken;
+  PersonalData personalData;
+  String authToken;
 
-  set authToken(String value) {
-    print('authToken = $value');
-    _authToken = value;
+  RequestManager(this._driver, this._communication);
 
-    if (!(_authTokenCompleter?.isCompleted ?? true)) {
-      _authTokenCompleter.complete(value);
-    }
-  }
+  Future<void> initAuth() async {
+    var _authCompleter = Completer<String>();
 
-  RequestManager(this._driver);
+    StreamSubscription sub;
+    sub = _communication.stream.listen((message) async {
+      if (message.type == 'auth') {
+        if (message.value.startsWith('Bearer ')) {
+          authToken = message.value.substring(7);
 
-  Future<String> waitForAuth() async {
-    if (_authToken != null) {
-      return _authToken;
-    }
-    _authTokenCompleter = Completer<String>();
-    return _authTokenCompleter.future;
+          print('Got token, getting /me data');
+          var meResponse = await makeRequest(DriverRequest(
+              method: 'GET', uri: Uri.parse('https://api.spotify.com/v1/me')));
+          personalData = PersonalData.fromJson(meResponse.body);
+          print('Hello ${personalData.displayName}!');
+
+          _authCompleter.complete();
+
+          await sub?.cancel();
+        }
+      }
+    });
+
+    _driver.execute('''
+        const authSocket = new WebSocket(`ws://localhost:6979`);
+        constantMock = window.fetch;
+        window.fetch = function() {
+            if (arguments.length === 2) {
+                if (arguments[0].startsWith('https://api.spotify.com/')) {
+                    let headers = arguments[1].headers || {};
+                    let auth = headers.authorization;
+                    if (auth != null) {
+                        authSocket.send(JSON.stringify({'type': 'auth', 'value': auth}));
+                    }
+                }
+            }
+            return constantMock.apply(this, arguments)
+        }
+    ''', []);
+
+    (await getElement(_driver, By.cssSelector('a[href="/collection"]'))).click();
+
+    return _authCompleter.future;
   }
 
   Future<DriverResponse> makeRequest(DriverRequest request) async {
-    var response = await _driver.executeAsync(request.toJS(await waitForAuth()), []);
+    var response =
+        await _driver.executeAsync(request.toJS(authToken), []);
     return DriverResponse(response['status'], Map.castFrom(response['body']));
   }
 }
@@ -68,7 +98,6 @@ class DriverRequest {
             'accept-language': 'en',
             'app-platform': 'WebPlayer',
             'spotify-app-version': '1587143698',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.113 Safari/537.36',
           }
         };
 
@@ -95,4 +124,25 @@ class DriverRequest {
     xhr.send(${body != null ? "'${jsonEncode(body)}'" : "null"});
   ''';
   }
+}
+
+class PersonalData {
+  final String birthdate;
+  final String country;
+  final String displayName;
+  final String email;
+  final Uri spotifyUrl;
+  final int followers;
+  final String id;
+  final String uri;
+
+  PersonalData.fromJson(Map<String, dynamic> json)
+      : birthdate = json['birthdate'],
+        country = json['country'],
+        displayName = json['display_name'],
+        email = json['email'],
+        spotifyUrl = Uri.parse(json['external_urls']['spotify']),
+        followers = json['followers']['total'],
+        id = json['id'],
+        uri = json['uri'];
 }
