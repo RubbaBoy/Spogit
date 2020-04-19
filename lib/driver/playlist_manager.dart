@@ -11,11 +11,12 @@ class PlaylistManager {
   final RequestManager _requestManager;
   BaseRevision baseRevision;
 
+  static const apiBase = 'https://api.spotify.com/v1';
+
   String get rootlistUrl =>
       'https://spclient.wg.spotify.com/playlist/v2/user/${_requestManager.personalData.id}/rootlist';
 
-  String get apiUrl =>
-      'https://api.spotify.com/v1/users/${_requestManager.personalData.id}';
+  String get apiUrl => '$apiBase/users/${_requestManager.personalData.id}';
 
   PlaylistManager._(this._driver, this._requestManager);
 
@@ -24,23 +25,19 @@ class PlaylistManager {
     return PlaylistManager._(driver, requestManager);
   }
 
-  Future<BaseRevision> analyzeBaseRevision([String revision]) async {
+  Future<BaseRevision> analyzeBaseRevision() async {
     var response = await _requestManager.makeRequest(DriverRequest(
       method: 'GET',
       uri: Uri.parse(
-          '$rootlistUrl?decorate=revision%2Clength%2Cattributes%2Ctimestamp%2Cowner&market=from_token').replace(queryParameters: {
+              '$rootlistUrl?decorate=revision%2Clength%2Cattributes%2Ctimestamp%2Cowner&market=from_token')
+          .replace(queryParameters: {
         'decorate': 'revision,length,attributes,timestamp,owner',
-        if (revision != null) ...{'revision': revision}
       }),
     ));
 
     if (response.status != 200) {
       throw 'Status ${response.status}: ${response.body['error']['message']}';
     }
-
-    print('FULLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL BODYYYYYYYYYYYYYYYYYY');
-
-    print(jsonEncode(response.body));
 
     return BaseRevision.fromJson(response.body);
   }
@@ -62,10 +59,10 @@ class PlaylistManager {
   Future<Map<String, dynamic>> movePlaylist(String moving,
       {String toGroup, int offset = 0, int absolutePosition}) async {
     return basedRequest((baseRevision) {
-      absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset + 1;
-      var fromIndex = baseRevision.getIndexOf(moving);
+      var movingElement = baseRevision.getElement(moving);
 
-      print('from: $fromIndex toIndex (abs): $absolutePosition');
+      absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset + 1;
+      var fromIndex = movingElement.index;
 
       return _requestManager.makeRequest(DriverRequest(
         uri: Uri.parse('$rootlistUrl/changes'),
@@ -79,7 +76,7 @@ class PlaylistManager {
                   'mov': {
                     'fromIndex': fromIndex,
                     'toIndex': absolutePosition,
-                    'length': 1
+                    'length': movingElement.moveCount,
                   }
                 }
               ],
@@ -137,7 +134,19 @@ class PlaylistManager {
           }
         ]
       }));
-    }).then((result) => {...result, ...{'id': id}});
+    }).then((result) => {
+          ...result,
+          ...{'id': id}
+        });
+  }
+
+  Future<Map<String, dynamic>> addTracks(
+      String playlist, List<String> trackIds) {
+    return _requestManager
+        .makeRequest(DriverRequest(
+            uri: Uri.parse('$apiBase/playlists/${playlist.parseId}'),
+            body: {'uris': trackIds.map((str) => str.parseId).toList()}))
+        .then((res) => res.body);
   }
 
   Future<Map<String, dynamic>> createPlaylist(String name) async {
@@ -159,53 +168,109 @@ class BaseRevision {
 
   BaseRevision.fromJson(Map<String, dynamic> json)
       : revision = json['revision'],
-        elements = List<RevisionElement>.from(json['contents']['items']
-                ?.asMap()
-                ?.map((i, elem) => MapEntry(
-                    i,
-                    RevisionElement.fromJson(
-                        i, Map<String, dynamic>.from(elem))))
-                ?.values ??
-            {});
+        elements = parseElements(jsonify(json['contents']));
 
-  // The element will be inserted BEFORE the given ID. So if you want to add
-  // something before the playlist at index 1, you would give it index 1.
+  static List<RevisionElement> parseElements(Map<String, dynamic> json) {
+    var children = analyzeChildren(json);
+    var meta = json['metaItems'];
+    return List<RevisionElement>.from(json['items'].asMap()?.map((i, elem) {
+          var metaVal = jsonify(meta[i]);
+          var itemVal = elem;
 
-  int getIndexOf(String id) {
-    id = RevisionElement.parseId(id);
-    print('idddddd = $id');
-    print('elements = $elements');
-    print(elements
-        .firstWhere((revision) => revision.id == id, orElse: () => null));
-    return elements
-            .firstWhere((revision) => revision.id == id, orElse: () => null)
-            ?.index ??
-        0;
+          var attributes = metaVal.isNotEmpty
+              ? jsonify({...metaVal['attributes'], ...itemVal['attributes']})
+              : itemVal['attributes'];
+          metaVal.remove('attributes');
+          itemVal.remove('attributes');
+
+          var uri = itemVal['uri'] as String;
+          var id = uri.parseId;
+          var type = uri.parseElementType;
+          var name = type == ElementType.FolderStart
+              ? Uri.decodeComponent(uri.split(':')[3].replaceAll('+', ' '))
+              : null;
+
+          return MapEntry(
+              i,
+              RevisionElement.fromJson(
+                  i,
+                  type == ElementType.FolderStart ? children[id] : 0,
+                  jsonify({...metaVal, ...itemVal, ...attributes}),
+                  name: name,
+                  id: id,
+                  type: type));
+        })?.values ??
+        {});
   }
+
+  static Map<String, int> analyzeChildren(Map<String, dynamic> json) {
+    // A list of items like [start-group, myspotifyid] and [end-group, someid] to be parsed
+    var ids = List<List<String>>.from(json['items']
+        .map((entry) => entry['uri'].split(':').skip(1).take(2).toList()));
+
+    var result = <String, int>{};
+
+    var currentlyIn = <String, int>{};
+
+    for (var value in ids) {
+      var id = value[1];
+      var type = value[0]; // playlist, start-group, end-group
+
+      for (var curr in currentlyIn.keys) {
+        currentlyIn[curr]++;
+      }
+
+      if (type == 'start-group') {
+        currentlyIn[id] = 0;
+      } else if (type == 'end-group') {
+        result[id] = currentlyIn.remove(id) - 1;
+      }
+    }
+
+    result.addAll(currentlyIn);
+
+    return result;
+  }
+
+  RevisionElement getElement(String id) {
+    id = id.parseId;
+    return elements.firstWhere((revision) => revision.id == id,
+        orElse: () => null);
+  }
+
+  int getIndexOf(String id) => getElement(id)?.index ?? 0;
+
+  int getTrackCountOf(String id) => getElement(id)?.length ?? 0;
 }
 
 class RevisionElement {
   final int index;
+  final String name;
+
+  /// The amount of tracks in a playlist. Will be null if this is not a playlist.
+  final int length;
+
+  /// The amount of children this item has, not including itself (e.g. Empty
+  /// folders will be 0).
+  final int children;
   final int timestamp;
   final bool public;
   final String id;
   final ElementType type;
 
-  const RevisionElement._(
-      this.index, this.timestamp, this.public, this.id, this.type);
+  /// Gets the amount of items to move if this were to be moved. On playlists
+  /// this is one, for groups/folders this is the [children] plus two. This
+  /// two is for the group start and end to move as well.
+  int get moveCount => type == ElementType.Playlist ? 1 : children + 2;
 
-  RevisionElement.fromJson(this.index, Map<String, dynamic> json)
-      : timestamp = int.parse(json['attributes']['timestamp']),
-        public = json['attributes']['public'] ?? false,
-        id = parseId(json['uri']),
-        type = parseElementType(json['uri']);
-
-  static String parseId(String uri) => uri.contains(':') ? uri.split(':')[2] : uri;
-
-  static ElementType parseElementType(String uri) =>
-      (uri.contains(':') ? uri.split(':')[1] : uri) == 'playlist'
-          ? ElementType.Playlist
-          : ElementType.Folder;
+  RevisionElement.fromJson(this.index, this.children, Map<String, dynamic> json,
+      {String name, String id, ElementType type})
+      : name = name ?? json['name'],
+        length = json['length'],
+        timestamp = (json['timestamp'] as String).parseInt(),
+        public = json['public'] ?? false,
+        id = id ?? (json['uri'] as String).parseId,
+        type = type ?? (json['uri'] as String).parseElementType;
 
   @override
   bool operator ==(Object other) =>
@@ -219,8 +284,27 @@ class RevisionElement {
 
   @override
   String toString() {
-    return 'RevisionElement{index: $index, timestamp: $timestamp, public: $public, id: $id, type: $type}';
+    return 'RevisionElement{index: $index, name: $name, length: $length, children: $children, timestamp: $timestamp, public: $public, id: $id, type: $type}';
   }
 }
 
-enum ElementType { Folder, Playlist }
+enum ElementType { FolderStart, FolderEnd, Playlist }
+
+extension ParsingUtils on String {
+  String splitOrThis(Pattern pattern, int index) {
+    if (!contains(pattern)) {
+      return this;
+    }
+
+    var arr = split(pattern);
+    return index >= arr.length ? this : arr[index];
+  }
+
+  String get parseId => splitOrThis(':', 2);
+
+  ElementType get parseElementType => const {
+        'playlist': ElementType.Playlist,
+        'start-group': ElementType.FolderStart,
+        'end-group': ElementType.FolderEnd
+      }[splitOrThis(':', 1)];
+}

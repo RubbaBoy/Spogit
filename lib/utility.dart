@@ -26,15 +26,6 @@ String get separator => Platform.pathSeparator;
 
 int get now => DateTime.now().millisecondsSinceEpoch;
 
-Map<String, dynamic> tryJsonDecode(String json,
-    [dynamic def = const <String, dynamic>{}]) {
-  try {
-    return jsonDecode(json);
-  } on FormatException catch (e) {
-    return def;
-  }
-}
-
 void syncPeriodic(Duration duration, Function callback) {
   callback();
   Timer(duration, () async => await syncPeriodic(duration, callback));
@@ -48,7 +39,42 @@ String randomHex(int length) {
   return res;
 }
 
-extension PathUtil on String {
+Uint8List fromMatcher(List data) => Uint8List.fromList(List<int>.of(
+        data.map((value) => value is String ? value.codeUnitAt(0) : value))
+    .toList());
+
+void printConsole(Object obj) => print(obj);
+
+V access<K, V>(Map<K, V> map, K key, [V def]) {
+  if (map == null) {
+    return def;
+  }
+
+  var val = map[key];
+  return val ?? def;
+}
+
+// Json utils
+
+Map<String, dynamic> jsonify(Map<dynamic, dynamic> map) =>
+    Map<String, dynamic>.from(map);
+
+Map<String, dynamic> tryJsonDecode(String json,
+    [dynamic def = const <String, dynamic>{}]) {
+  try {
+    return jsonDecode(json);
+  } on FormatException catch (e) {
+    return def;
+  }
+}
+
+// Extensions
+
+extension StringUtils on String {
+  int parseInt() => int.parse(this);
+
+  double parseDouble() => double.parse(this);
+
   String get separatorFix =>
       (startsWith('~') ? '$userHome${substring(1, length)}' : this)
           .replaceAll('/', separator);
@@ -65,7 +91,7 @@ extension NumUtil on int {
   }
 }
 
-extension PathStuff on List<dynamic> {
+extension PathUtils on List<dynamic> {
   String get separatorFix =>
       map((e) => (e is File || e is Directory ? e.path : e) as String)
           .where((str) => str.isNotEmpty)
@@ -76,17 +102,11 @@ extension PathStuff on List<dynamic> {
   Directory get directory => Directory(separatorFix);
 }
 
-Uint8List fromMatcher(List data) => Uint8List.fromList(List<int>.of(
-        data.map((value) => value is String ? value.codeUnitAt(0) : value))
-    .toList());
-
 extension ASCIIShit on int {
   bool get isASCII => (this == 10 || this == 13 || (this >= 32 && this <= 126));
 
   bool get isNotASCII => !isASCII;
 }
-
-void printConsole(Object obj) => print(obj);
 
 extension PrintStuff<T> on T {
   T print() {
