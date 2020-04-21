@@ -26,5 +26,6 @@ Future<void> main(List<String> args) async {
   print('Running as daemon');
 
   final spogit = await Spogit.createSpogit();
-  spogit.startDaemon(path);
+  spogit.start(path);
+//  spogit.startDaemon(path);
 }

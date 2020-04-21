@@ -26,7 +26,11 @@ class DriverAPI {
   WebDriver driver;
   File cookiesFile = File('cookies.json');
 
-  Future<void> main(List<String> args) async {
+  JSCommunication communication;
+  RequestManager requestManager;
+  PlaylistManager playlistManager;
+
+  Future<void> startDriver() async {
     final runner = WebDriverRunner();
     await runner.start();
 
@@ -34,15 +38,18 @@ class DriverAPI {
 
     driver = runner.driver;
 
-    final communication = await JSCommunication.startCommunication();
+    communication = await JSCommunication.startCommunication();
 
-    final requestManager = RequestManager(driver, communication);
+    requestManager = RequestManager(driver, communication);
 
     await getCredentials();
 
     await requestManager.initAuth();
 
-    final playlistManager = await PlaylistManager.createPlaylistManager(driver, requestManager, communication);
+    playlistManager = await PlaylistManager.createPlaylistManager(driver, requestManager, communication);
+  }
+
+  Future<void> main(List<String> args) async {
 
     print('Initialized everything!');
 
@@ -64,9 +71,9 @@ class DriverAPI {
     const anotherRouter = '954932e2829000';
     var moved = await playlistManager.movePlaylist(secondChild, toGroup: anotherRouter);
 
-//    var base = await playlistManager.analyzeBaseRevision();
-//    print('Base =');
-//    print(base.elements.join('\n'));
+    var base = await playlistManager.analyzeBaseRevision();
+    print('Base =');
+    print(base.elements.join('\n'));
 
     print(moved);
 
@@ -94,46 +101,11 @@ class DriverAPI {
         driver.cookies.all.map((cookie) => cookie.toJson()).toList()));
   }
 
-  void moveObject(String moving, String to) {
-    driver.execute('''
-    
-    ''', [moving, to]);
-  }
-
-  Stream<String> watchFile(File file) {
-    final stream = StreamController<String>.broadcast();
-
-    var last = 0;
-    Timer.periodic(Duration(seconds: 3), (_) async {
-      var newBytes = file.lengthSync() - last;
-
-      if (newBytes == 0) {
-        return;
-      }
-
-      await LineSplitter()
-          .bind(utf8.decoder
-              .bind(file.openRead(last, last += newBytes).take(newBytes)))
-          .forEach((data) => stream.add(data));
-    });
-
-    return stream.stream;
-  }
-
   Map<dynamic, dynamic> getLocalStorage() =>
       driver.execute('return window.localStorage;', []);
 
   void setLocalStorage(String key, String value) => driver.execute(
       'window.localStorage.setItem(arguments[0], arguments[1])', [key, value]);
-}
-
-class JsonMessage {
-  final String type;
-  final String value;
-
-  JsonMessage.fromJSON(Map<String, dynamic> json) :
-      type = json['type'],
-        value = json['value'];
 }
 
 class WebDriverRunner {

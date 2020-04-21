@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:Spogit/driver/driver_api.dart';
-
 class JSCommunication {
   final int port;
   final _broadcast = StreamController<JsonMessage>.broadcast();
@@ -32,4 +30,13 @@ class JSCommunication {
       }
     });
   }
+}
+
+class JsonMessage {
+  final String type;
+  final Map<String, dynamic> value;
+
+  JsonMessage.fromJSON(Map<String, dynamic> json) :
+        type = json['type'],
+        value = json['value'];
 }

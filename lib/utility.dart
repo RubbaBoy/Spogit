@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
+
 import 'package:collection/collection.dart';
 
 final env = Platform.environment;
@@ -82,6 +84,8 @@ extension StringUtils on String {
   File get file => File(separatorFix);
 
   Directory get directory => Directory(separatorFix);
+
+  Uri get uri => Uri.tryParse(this);
 }
 
 extension NumUtil on int {
@@ -113,4 +117,8 @@ extension PrintStuff<T> on T {
     printConsole(this);
     return this;
   }
+}
+
+extension ResponseUtils on http.Response {
+  Map<String, dynamic> get json => jsonDecode(body);
 }

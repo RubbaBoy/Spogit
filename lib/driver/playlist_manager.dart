@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/utility.dart';
+import 'package:http/http.dart';
 import 'package:webdriver/sync_io.dart';
 
 class PlaylistManager {
@@ -25,35 +25,49 @@ class PlaylistManager {
     return PlaylistManager._(driver, requestManager);
   }
 
+  Future<String> baseRevisionETag() async {
+    var response = await DriverRequest(
+      method: RequestMethod.Head,
+      token: _requestManager.authToken,
+      uri: Uri.parse(rootlistUrl).replace(queryParameters: {
+        'decorate': 'revision,length,attributes,timestamp,owner',
+        'market': 'from_token'
+      }),
+    ).send();
+
+    return response.headers['etag'];
+  }
+
   Future<BaseRevision> analyzeBaseRevision() async {
-    var response = await _requestManager.makeRequest(DriverRequest(
-      method: 'GET',
-      uri: Uri.parse(
-              '$rootlistUrl?decorate=revision%2Clength%2Cattributes%2Ctimestamp%2Cowner&market=from_token')
+    var response = await DriverRequest(
+      method: RequestMethod.Get,
+      token: _requestManager.authToken,
+      uri: Uri.parse(rootlistUrl)
           .replace(queryParameters: {
         'decorate': 'revision,length,attributes,timestamp,owner',
+        'market': 'from_token'
       }),
-    ));
+    ).send();
 
-    if (response.status != 200) {
-      throw 'Status ${response.status}: ${response.body['error']['message']}';
+    if (response.statusCode != 200) {
+      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
     }
 
-    return BaseRevision.fromJson(response.body);
+    return BaseRevision.fromJson(response.json);
   }
 
   Future<Map<String, dynamic>> basedRequest(
-      FutureOr<DriverResponse> Function(BaseRevision) makeRequest,
+      FutureOr<Response> Function(BaseRevision) makeRequest,
       [bool useBase = true]) async {
     var response =
         await makeRequest(useBase ? await analyzeBaseRevision() : null);
 
-    if (response.status >= 300) {
-      print('code = ${response.status}');
-      throw 'Status ${response.status}: ${response.body['error']['message']}';
+    if (response.statusCode >= 300) {
+      print('code = ${response.statusCode}');
+      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
     }
 
-    return response.body;
+    return response.json;
   }
 
   Future<Map<String, dynamic>> movePlaylist(String moving,
@@ -64,8 +78,9 @@ class PlaylistManager {
       absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset + 1;
       var fromIndex = movingElement.index;
 
-      return _requestManager.makeRequest(DriverRequest(
+      return DriverRequest(
         uri: Uri.parse('$rootlistUrl/changes'),
+        token: _requestManager.authToken,
         body: {
           'baseRevision': baseRevision.revision,
           'deltas': [
@@ -86,7 +101,7 @@ class PlaylistManager {
             }
           ]
         },
-      ));
+      ).send();
     });
   }
 
@@ -96,44 +111,47 @@ class PlaylistManager {
 
     return basedRequest((baseRevision) {
       absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset;
-      return _requestManager.makeRequest(
-          DriverRequest(uri: Uri.parse('$rootlistUrl/changes'), body: {
-        'baseRevision': '${baseRevision.revision}',
-        'deltas': [
-          {
-            'ops': [
-              {
-                'kind': 'ADD',
-                'add': {
-                  'fromIndex': absolutePosition,
-                  'items': [
-                    {
-                      'attributes': {'timestamp': now},
-                      'uri':
-                          'spotify:start-group:$id:${Uri.encodeComponent(name)}'
-                    }
-                  ]
+      return DriverRequest(
+        uri: Uri.parse('$rootlistUrl/changes'),
+        token: _requestManager.authToken,
+        body: {
+          'baseRevision': '${baseRevision.revision}',
+          'deltas': [
+            {
+              'ops': [
+                {
+                  'kind': 'ADD',
+                  'add': {
+                    'fromIndex': absolutePosition,
+                    'items': [
+                      {
+                        'attributes': {'timestamp': now},
+                        'uri':
+                            'spotify:start-group:$id:${Uri.encodeComponent(name)}'
+                      }
+                    ]
+                  }
+                },
+                {
+                  'kind': 'ADD',
+                  'add': {
+                    'fromIndex': absolutePosition + 1,
+                    'items': [
+                      {
+                        'attributes': {'timestamp': now},
+                        'uri': 'spotify:end-group:$id'
+                      }
+                    ]
+                  }
                 }
-              },
-              {
-                'kind': 'ADD',
-                'add': {
-                  'fromIndex': absolutePosition + 1,
-                  'items': [
-                    {
-                      'attributes': {'timestamp': now},
-                      'uri': 'spotify:end-group:$id'
-                    }
-                  ]
-                }
+              ],
+              'info': {
+                'source': {'client': 'WEBPLAYER'}
               }
-            ],
-            'info': {
-              'source': {'client': 'WEBPLAYER'}
             }
-          }
-        ]
-      }));
+          ]
+        },
+      ).send();
     }).then((result) => {
           ...result,
           ...{'id': id}
@@ -142,22 +160,23 @@ class PlaylistManager {
 
   Future<Map<String, dynamic>> addTracks(
       String playlist, List<String> trackIds) {
-    return _requestManager
-        .makeRequest(DriverRequest(
-            uri: Uri.parse('$apiBase/playlists/${playlist.parseId}'),
-            body: {'uris': trackIds.map((str) => str.parseId).toList()}))
-        .then((res) => res.body);
+    return DriverRequest(
+      uri: Uri.parse('$apiBase/playlists/${playlist.parseId}'),
+      token: _requestManager.authToken,
+      body: {'uris': trackIds.map((str) => str.parseId).toList()},
+    ).send().then((res) => res.json);
   }
 
   Future<Map<String, dynamic>> createPlaylist(String name) async {
     return basedRequest(
-        (_) => _requestManager.makeRequest(DriverRequest(
+        (_) => DriverRequest(
               uri: Uri.parse('$apiUrl/playlists'),
+              token: _requestManager.authToken,
               body: {
                 'name': name,
                 'public': true,
               },
-            )),
+            ).send(),
         false);
   }
 }

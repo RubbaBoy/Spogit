@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver_utility.dart';
 import 'package:Spogit/utility.dart';
+import 'package:http/http.dart' as http;
 import 'package:webdriver/sync_io.dart';
 
 class RequestManager {
@@ -20,37 +22,36 @@ class RequestManager {
 
     StreamSubscription sub;
     sub = _communication.stream.listen((message) async {
-      if (message.type == 'auth') {
-        if (message.value.startsWith('Bearer ')) {
-          authToken = message.value.substring(7);
+      var headers = access(message.value['1'], 'headers');
 
-          var meResponse = await makeRequest(DriverRequest(
-              method: 'GET', uri: Uri.parse('https://api.spotify.com/v1/me')));
-
-          personalData = PersonalData.fromJson(meResponse.body);
-
-          authCompleter.complete();
-
-          await sub?.cancel();
-        }
+      var authorization = access(headers, 'authorization');
+      if (authorization == null) {
+        return;
       }
+
+      await sub?.cancel();
+
+      authToken = authorization.substring(7);
+
+      var meResponse = await DriverRequest(method: RequestMethod.Get, uri: Uri.parse('https://api.spotify.com/v1/me'), token: authToken)
+      .send();
+
+      print(meResponse.json);
+
+      personalData = PersonalData.fromJson(meResponse.json);
+
+      authCompleter.complete();
     });
 
     _driver.execute('''
-        const authSocket = new WebSocket(`ws://localhost:6979`);
-        constantMock = window.fetch;
-        window.fetch = function() {
-            if (arguments.length === 2) {
-                if (arguments[0].startsWith('https://api.spotify.com/')) {
-                    let headers = arguments[1].headers || {};
-                    let auth = headers.authorization;
-                    if (auth != null) {
-                        authSocket.send(JSON.stringify({'type': 'auth', 'value': auth}));
-                    }
-                }
-            }
-            return constantMock.apply(this, arguments)
+const authSocket = new WebSocket(`ws://localhost:6979`);
+constantMock = window.fetch;
+window.fetch = function() {
+        if (arguments[0].includes('spotify.com')) {
+            authSocket.send(JSON.stringify({'type': 'http', 'value': arguments}));
         }
+    return constantMock.apply(this, arguments)
+}
     ''', []);
 
     (await getElement(_driver, By.cssSelector('a[href="/collection"]')))
@@ -58,45 +59,30 @@ class RequestManager {
 
     return authCompleter.future;
   }
-
-  Future<DriverResponse> makeRequest(DriverRequest request) async {
-    var response = await _driver.executeAsync(request.toJS(authToken), []);
-    return DriverResponse(response['status'], Map.castFrom(response['body']));
-  }
-}
-
-class DriverResponse {
-  final int status;
-  final Map<String, dynamic> body;
-
-  DriverResponse(this.status, this.body);
-
-  @override
-  String toString() {
-    return 'DriverResponse{status: $status, body: $body}';
-  }
 }
 
 class DriverRequest {
-  final bool authed;
-  final String method;
+  final RequestMethod method;
   final Uri uri;
   final Map<String, String> headers;
   final Map<String, dynamic> body;
 
   DriverRequest({
-    this.authed = true,
-    this.method = 'POST',
+    String token,
+    RequestMethod method,
     Uri uri,
     this.body,
     Map<String, String> headers = const {},
-  })  : uri = uri.replace(queryParameters: {
-          ...{'time': '$now'}, // This is simply to stop Chrome from caching requests
+  })  : method = method ?? RequestMethod.Post,
+        uri = uri.replace(queryParameters: {
+          ...{'time': '$now'},
+          // This is simply to stop Chrome from caching requests
           ...uri.queryParameters
         }),
         headers = {
           ...headers,
           ...{
+            if (token != null) ...{'authorization': 'Bearer $token'},
             'accept': 'application/json',
             'content-type': 'application/json;charset=UTF-8',
             'accept-language': 'en',
@@ -105,29 +91,28 @@ class DriverRequest {
           }
         };
 
-  String toJS(String authToken) {
-    var xhrHeaders = {
-      ...headers,
-      if (authed) ...{'Authorization': 'Bearer $authToken'},
-    };
+  Future<http.Response> send() =>
+      method.send(uri.toString(), body: body, headers: headers);
+}
 
-    return '''
-    let args = arguments;
-    let xhr = new XMLHttpRequest();
-    xhr.withCredentials = $authed;
-    
-    xhr.addEventListener("readystatechange", function() {
-      if(this.readyState === 4) {
-        args[0]({'body': JSON.parse(this.responseText), 'status': this.status});
-      }
-    });
-    
-    xhr.open("$method", "$uri");
-    ${xhrHeaders.keys.map((k) => 'xhr.setRequestHeader("$k", "${xhrHeaders[k]}");').join('\n')}
-    
-    xhr.send(${body != null ? "'${jsonEncode(body)}'" : "null"});
-  ''';
-  }
+class RequestMethod {
+  static final RequestMethod Get =
+      RequestMethod._((url, headers, body) => http.get(url, headers: headers));
+
+  static final RequestMethod Post = RequestMethod._(
+      (url, headers, body) => http.post(url, headers: headers, body: body));
+
+  static final RequestMethod Head =
+      RequestMethod._((url, headers, body) => http.head(url, headers: headers));
+
+  final Future<http.Response> Function(
+      String url, Map<String, String> headers, dynamic body) request;
+
+  const RequestMethod._(this.request);
+
+  Future<http.Response> send(String url,
+          {Map<String, String> headers, dynamic body}) async =>
+      await request(url, headers, body);
 }
 
 class PersonalData {
@@ -145,8 +130,8 @@ class PersonalData {
         country = json['country'],
         displayName = json['display_name'],
         email = json['email'],
-        spotifyUrl = Uri.parse(json['external_urls']['spotify']),
-        followers = json['followers']['total'],
+        spotifyUrl = (access(json['external_urls'], 'spotify') as String)?.uri,
+        followers = access(json['followers'], 'total') as int,
         id = json['id'],
         uri = json['uri'];
 }
