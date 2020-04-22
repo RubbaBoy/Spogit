@@ -11,10 +11,6 @@ class ChangeWatcher {
   ChangeWatcher(this.driverAPI);
 
   void watchChanges(Function(BaseRevision) callback) {
-//    driverAPI.communication.stream.listen((message) {
-//
-//    });
-
   // The last etag for the playlist tree request
   String previousETag;
 

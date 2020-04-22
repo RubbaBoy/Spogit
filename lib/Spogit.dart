@@ -5,6 +5,7 @@ import 'package:Spogit/change_watcher.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/file_watcher.dart';
+import 'package:Spogit/local_manager.dart';
 
 class Spogit {
 
@@ -20,19 +21,23 @@ class Spogit {
     return Spogit._(driverAPI);
   }
 
-  void start(Directory path) {
+  Future<void> start(Directory path) async {
     final changeWatcher = ChangeWatcher(driverAPI);
     final fileWatcher = FileWatcher(path);
 
-    changeWatcher.watchChanges((baseRevision) {
-      for (var value in baseRevision.elements) {
+//    changeWatcher.watchChanges((baseRevision) {
+//      for (var value in baseRevision.elements) {
+//
+//      }
+//    });
+//
+//    fileWatcher.listenSpogit((root) {
+//
+//    });
 
-      }
-    });
-
-    fileWatcher.listenSpogit((root) {
-
-    });
+    // first,   tld playlist
+    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), ['spotify:start-group:b623551dee2c000:first', 'spotify:playlist:5LtVZsSVm60F8lHAWGnute']);
+    await linkedStuff.initElement();
   }
 
 //  void startDaemon(Directory path) {

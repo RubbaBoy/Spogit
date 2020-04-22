@@ -9,7 +9,6 @@ import 'package:webdriver/sync_io.dart';
 class PlaylistManager {
   final WebDriver _driver;
   final RequestManager _requestManager;
-  BaseRevision baseRevision;
 
   static const apiBase = 'https://api.spotify.com/v1';
 
@@ -42,8 +41,7 @@ class PlaylistManager {
     var response = await DriverRequest(
       method: RequestMethod.Get,
       token: _requestManager.authToken,
-      uri: Uri.parse(rootlistUrl)
-          .replace(queryParameters: {
+      uri: Uri.parse(rootlistUrl).replace(queryParameters: {
         'decorate': 'revision,length,attributes,timestamp,owner',
         'market': 'from_token'
       }),
@@ -63,7 +61,6 @@ class PlaylistManager {
         await makeRequest(useBase ? await analyzeBaseRevision() : null);
 
     if (response.statusCode >= 300) {
-      print('code = ${response.statusCode}');
       throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
     }
 
@@ -167,6 +164,18 @@ class PlaylistManager {
     ).send().then((res) => res.json);
   }
 
+  Future<Map<String, dynamic>> getTracks(String playlist) {
+    return DriverRequest(
+      method: RequestMethod.Get,
+      uri: Uri.parse('$apiBase/playlists/${playlist.parseId}')
+          .replace(queryParameters: {
+        'type': 'track,episode',
+        'market': 'from_token',
+      }),
+      token: _requestManager.authToken,
+    ).send().then((res) => res.json);
+  }
+
   Future<Map<String, dynamic>> createPlaylist(String name) async {
     return basedRequest(
         (_) => DriverRequest(
@@ -260,21 +269,38 @@ class BaseRevision {
   int getIndexOf(String id) => getElement(id)?.index ?? 0;
 
   int getTrackCountOf(String id) => getElement(id)?.length ?? 0;
+
+  @override
+  String toString() {
+    return 'BaseRevision{revision: $revision, elements: $elements}';
+  }
 }
 
 class RevisionElement {
+  /// The index of the revision element, used for moving elements.
   final int index;
+
+  /// (Present if folder) The name of the element.
   final String name;
 
-  /// The amount of tracks in a playlist. Will be null if this is not a playlist.
+  /// (Present if playlist) The amount of tracks in a playlist.
   final int length;
 
   /// The amount of children this item has, not including itself (e.g. Empty
   /// folders will be 0).
   final int children;
+
+  /// The timestamp created.
   final int timestamp;
+
+  /// (Present if playlist) If the playlist is publicly available.
   final bool public;
+
+  /// The parsed ID of the current element. If the raw uri was
+  /// `spotify:playlist:whatever` this value would be `whatever`.
   final String id;
+
+  /// The [ElementType] of the current element.
   final ElementType type;
 
   /// Gets the amount of items to move if this were to be moved. On playlists
