@@ -4,9 +4,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
-
 import 'package:collection/collection.dart';
+import 'package:http/http.dart' as http;
 
 final env = Platform.environment;
 
@@ -93,6 +92,10 @@ extension NumUtil on int {
     var str = toString();
     return '${padding * (totalLength - str.length)}$str';
   }
+
+  int add(int num) => this + num;
+
+  int sub(int num) => this - num;
 }
 
 extension PathUtils on List<dynamic> {
@@ -104,6 +107,12 @@ extension PathUtils on List<dynamic> {
   File get file => File(separatorFix);
 
   Directory get directory => Directory(separatorFix);
+}
+
+extension SafeUtils<T> on List<T> {
+  T get safeLast => isNotEmpty ? last : null;
+
+  T get safeFirst => isNotEmpty ? first : null;
 }
 
 extension ASCIIShit on int {
@@ -120,5 +129,15 @@ extension PrintStuff<T> on T {
 }
 
 extension ResponseUtils on http.Response {
-  Map<String, dynamic> get json => jsonDecode(body);
+  Map<String, dynamic> get json => tryJsonDecode(body);
+}
+
+extension UriUtils on Uri {
+  String get realName {
+    if (pathSegments.length > 1 && pathSegments.last.isEmpty) {
+      return ([...pathSegments]..removeLast()).last;
+    }
+
+    return pathSegments.last;
+  }
 }

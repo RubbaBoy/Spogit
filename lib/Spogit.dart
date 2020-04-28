@@ -6,6 +6,7 @@ import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/file_watcher.dart';
 import 'package:Spogit/local_manager.dart';
+import 'package:Spogit/utility.dart';
 
 class Spogit {
 
@@ -35,9 +36,12 @@ class Spogit {
 //
 //    });
 
-    // first,   tld playlist
-    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), ['spotify:start-group:b623551dee2c000:first', 'spotify:playlist:5LtVZsSVm60F8lHAWGnute']);
-    await linkedStuff.initElement();
+//    // first,   tld playlist
+//    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), ['spotify:start-group:b623551dee2c000:first', 'spotify:playlist:5LtVZsSVm60F8lHAWGnute']);
+//    await linkedStuff.initElement();
+
+      final local = LinkedPlaylist.fromLocal(driverAPI, [path, 'Test Local'].directory);
+      await local.initLocal();
   }
 
 //  void startDaemon(Directory path) {

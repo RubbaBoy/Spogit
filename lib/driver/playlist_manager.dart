@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
@@ -47,6 +48,9 @@ class PlaylistManager {
       }),
     ).send();
 
+    print('body ====');
+    print(response.body);
+
     if (response.statusCode != 200) {
       throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
     }
@@ -61,7 +65,8 @@ class PlaylistManager {
         await makeRequest(useBase ? await analyzeBaseRevision() : null);
 
     if (response.statusCode >= 300) {
-      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
+//      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
+      throw 'Status ${response.statusCode}: ${response.body}';
     }
 
     return response.json;
@@ -72,7 +77,7 @@ class PlaylistManager {
     return basedRequest((baseRevision) {
       var movingElement = baseRevision.getElement(moving);
 
-      absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset + 1;
+      absolutePosition ??= (baseRevision.getIndexOf(toGroup)?.add(1) ?? 0) + offset;
       var fromIndex = movingElement.index;
 
       return DriverRequest(
@@ -107,7 +112,7 @@ class PlaylistManager {
     var id = '${randomHex(12)}000';
 
     return basedRequest((baseRevision) {
-      absolutePosition ??= baseRevision.getIndexOf(toGroup) + offset;
+      absolutePosition ??= (baseRevision.getIndexOf(toGroup)?.add(1) ?? 0) + offset;
       return DriverRequest(
         uri: Uri.parse('$rootlistUrl/changes'),
         token: _requestManager.authToken,
@@ -158,13 +163,48 @@ class PlaylistManager {
   Future<Map<String, dynamic>> addTracks(
       String playlist, List<String> trackIds) {
     return DriverRequest(
-      uri: Uri.parse('$apiBase/playlists/${playlist.parseId}'),
+      uri: Uri.parse('$apiBase/playlists/${playlist.parseId}/tracks'),
       token: _requestManager.authToken,
-      body: {'uris': trackIds.map((str) => str.parseId).toList()},
+      body: {'uris': trackIds.map((str) => 'spotify:track:${str.parseId}').toList()},
     ).send().then((res) => res.json);
   }
 
-  Future<Map<String, dynamic>> getTracks(String playlist) {
+  /// Removes tracks from the given [playlist] ID. [trackIds] should contain a
+  /// list of track IDs to remove. These do not have to be parsed IDs.
+  Future<Map<String, dynamic>> removeTracks(
+      String playlist, List<String> trackIds) {
+    trackIds = trackIds.map((str) => str.parseId).toList();
+
+    return getPlaylistInfo(playlist).then((info) {
+      var items = info['tracks']['items'] as List<Map<String, dynamic>>;
+
+      var ids = items
+          .map((track) => track['track']['id'])
+          .map((id) => id.parseId)
+          .toList()
+          .asMap()
+            ..removeWhere((i, id) => !trackIds.contains(id));
+
+      return DriverRequest(
+        method: RequestMethod.Delete,
+        uri: Uri.parse('$apiBase/playlists/${playlist.parseId}'),
+        token: _requestManager.authToken,
+        body: {
+          'tracks': [
+            for (var index in ids.keys)
+              {
+                {
+                  'positions': [index],
+                  'uri': 'spotify:track:${ids[index]}'
+                },
+              }
+          ]
+        },
+      ).send().then((res) => res.json);
+    });
+  }
+
+  Future<Map<String, dynamic>> getPlaylistInfo(String playlist) {
     return DriverRequest(
       method: RequestMethod.Get,
       uri: Uri.parse('$apiBase/playlists/${playlist.parseId}')
@@ -183,7 +223,7 @@ class PlaylistManager {
               token: _requestManager.authToken,
               body: {
                 'name': name,
-                'public': true,
+//                'public': true,
               },
             ).send(),
         false);
@@ -201,6 +241,10 @@ class BaseRevision {
   static List<RevisionElement> parseElements(Map<String, dynamic> json) {
     var children = analyzeChildren(json);
     var meta = json['metaItems'];
+    if (meta == null) {
+      return const [];
+    }
+
     return List<RevisionElement>.from(json['items'].asMap()?.map((i, elem) {
           var metaVal = jsonify(meta[i]);
           var itemVal = elem;
@@ -233,7 +277,7 @@ class BaseRevision {
 
   static Map<String, int> analyzeChildren(Map<String, dynamic> json) {
     // A list of items like [start-group, myspotifyid] and [end-group, someid] to be parsed
-    var ids = List<List<String>>.from(json['items']
+    var ids = List<List<String>>.from((json['items'] ?? const [])
         .map((entry) => entry['uri'].split(':').skip(1).take(2).toList()));
 
     var result = <String, int>{};
@@ -261,14 +305,14 @@ class BaseRevision {
   }
 
   RevisionElement getElement(String id) {
-    id = id.parseId;
+    id = id?.parseId;
     return elements.firstWhere((revision) => revision.id == id,
         orElse: () => null);
   }
 
-  int getIndexOf(String id) => getElement(id)?.index ?? 0;
+  int getIndexOf(String id) => getElement(id)?.index;
 
-  int getTrackCountOf(String id) => getElement(id)?.length ?? 0;
+  int getTrackCountOf(String id) => getElement(id)?.length;
 
   @override
   String toString() {

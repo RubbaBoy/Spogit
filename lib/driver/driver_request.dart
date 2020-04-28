@@ -100,10 +100,13 @@ class RequestMethod {
       RequestMethod._((url, headers, body) => http.get(url, headers: headers));
 
   static final RequestMethod Post = RequestMethod._(
-      (url, headers, body) => http.post(url, headers: headers, body: body));
+      (url, headers, body) => http.post(url, headers: headers, body: jsonEncode(body)));
 
   static final RequestMethod Head =
       RequestMethod._((url, headers, body) => http.head(url, headers: headers));
+
+  static final RequestMethod Delete =
+      RequestMethod._((url, headers, body) => http.delete(url, headers: headers));
 
   final Future<http.Response> Function(
       String url, Map<String, String> headers, dynamic body) request;

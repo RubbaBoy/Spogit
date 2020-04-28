@@ -12,13 +12,18 @@ class LinkedPlaylist {
   final DriverAPI driverAPI;
   final SpogitRoot root;
 
+  PlaylistManager get playlists => driverAPI.playlistManager;
+
   /// A flat list of [RevisionElement]s
   List<RevisionElement> elements;
 
   /// Creates a [LinkedPlaylist] from an already populated purley local
-  /// directory in ~/Spogit. Upon creation, this will update the Spotify API.
+  /// directory in ~/Spogit. Upon creation, this will update the Spotify API
+  /// if no `local` files are found.
   LinkedPlaylist.fromLocal(this.driverAPI, Directory directory) : root = SpogitRoot(directory) {
     print('Updating Spotify API');
+
+    elements = <RevisionElement>[];
   }
 
   /// Creates a [LinkedPlaylist] from a given [BaseRevision] and list of
@@ -43,6 +48,58 @@ class LinkedPlaylist {
     }
   }
 
+  Future<void> initLocal([bool forceCreate = true]) async {
+    Future<void> traverse(Mappable mappable, List<SpotifyFolder> parents) async {
+      var to = parents.safeLast?.spotifyId;
+
+      if (mappable.spotifyId != null && !forceCreate) {
+        return;
+      }
+
+      if (mappable is SpotifyPlaylist) {
+//        print('Creating playlist "${mappable.name}" in ${parents.map((folder) => folder.name).join('/')}');
+        print('Creating playlist "${mappable.name}" in #$to');
+
+        var id = (await playlists.createPlaylist(
+            mappable.name))['id'];
+
+      await playlists.movePlaylist(id, toGroup: to);
+
+        await playlists.addTracks(id, mappable.songs.map((song) => song.id).toList());
+
+      print('Created previous with an ID of $id');
+        mappable.spotifyId = id;
+      } else if (mappable is SpotifyFolder) {
+        print('Creating folder "${mappable.name}" in #$to');
+
+        var id = (await playlists.createFolder(
+            mappable.name, toGroup: to))['id'];
+        mappable.spotifyId = id;
+
+        mappable.children.forEach((child) => traverse(child, [...parents, mappable]));
+      }
+    }
+
+    var pl = root.playlists;
+    print('playlist  = $pl');
+    pl.forEach((child) => traverse(child, []));
+  }
+
+  void traverse(Function(Mappable, List<SpotifyFolder>) callback) {
+    void bruh(Mappable mappable, List<SpotifyFolder> parents) {
+      if (mappable is SpotifyPlaylist) {
+        callback(mappable, parents);
+      } else if (mappable is SpotifyFolder) {
+        mappable.children.forEach((child) {
+          callback(child, parents);
+          bruh(child, [...parents, mappable]);
+        });
+      }
+    }
+
+    root.playlists.forEach((child) => bruh(child, []));
+  }
+
   Future<void> initElement() async {
     print('Local list comprises of:');
     print(elements.map((el) => el.toString()).join('\n'));
@@ -53,10 +110,13 @@ class LinkedPlaylist {
       var id = element.id;
       switch (element.type) {
         case ElementType.Playlist:
-          var tracks = (await driverAPI.playlistManager.getTracks(id))['tracks']['items'];
+          var playlistDetails = await driverAPI.playlistManager.getPlaylistInfo(id);
+
           current.addPlaylist(element.name)
             ..spotifyId = id
-            ..songs = List<SpotifySong>.from(tracks.map((track) => SpotifySong.create(track['track']['id'])));
+            ..name = element.name
+            ..description = playlistDetails['description']
+            ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items'].map((track) => SpotifySong.create(track['track']['id'])));
           break;
         case ElementType.FolderStart:
           current = (current.addFolder(element.name)..spotifyId = id);
