@@ -139,6 +139,8 @@ class WebDriverRunner {
 
 //    print('Starting');
 
+
+
     _driver = await createDriver(
         uri: Uri.parse('http://localhost:${chromeDriverPort}/wd/hub/'),
         desired: {
@@ -149,6 +151,8 @@ class WebDriverRunner {
           'goog:loggingPrefs': {'browser': 'ALL'},
           'goog:chromeOptions': {
             'args': [
+//              '--headless',
+
               '--disable-web-security',
               '--allow-running-insecure-content',
 //              '--disable-background-networking',
@@ -180,7 +184,7 @@ class WebDriverRunner {
 //              '--disable-spell-checking',
 //              '--disable-d3d11',
 //              '--disable-pinch',
-              '--auto-open-devtools-for-tabs',
+//              '--auto-open-devtools-for-tabs',
 //              '--disable-site-isolation-trials data:,'
             ],
           },

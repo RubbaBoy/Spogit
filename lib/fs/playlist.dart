@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:Spogit/fs/local_storage.dart';
 import 'package:Spogit/utility.dart';
 
 class SpogitRoot with SpotifyContainer {
   final Directory root;
+  final RootLocal rootLocal;
   final File meta;
   final File coverImage;
 
@@ -13,25 +15,28 @@ class SpogitRoot with SpotifyContainer {
 
   List<Mappable> _playlists;
 
+  /// A nested list of [Mappable]s in the directory
   List<Mappable> get playlists => _playlists ??= _traverseDir(root, null);
 
-  SpogitRoot(this.root)
-      : meta = [root, 'meta.json'].file..createSync(recursive: true),
+  SpogitRoot(this.root,
+      {bool creating = false, List<String> tracking = const []})
+      : rootLocal = RootLocal([root, 'local'].file),
+        meta = [root, 'meta.json'].file..tryCreateSync(),
         coverImage = [root, 'cover.png'].file {
     playlists;
+    if (creating) {
+      rootLocal
+        ..id = randomHex(16)
+        ..tracking = tracking;
+    }
   }
 
   bool get isValid => meta.existsSync();
 
-  List<Mappable> _traverseDir(Directory dir, SpotifyFolder parent) {
-    print('traversing $dir');
-    return dir
-          .listSync()
-          .whereType<Directory>()
-          .map((dir) {
-            var name = dir.uri.realName;
-            print('name = $name');
-      if (dir.isPlaylist) {
+  List<Mappable> _traverseDir(Directory dir, SpotifyFolder parent) =>
+      dir.listSync().whereType<Directory>().map((dir) {
+        var name = dir.uri.realName;
+        if (dir.isPlaylist) {
           return SpotifyPlaylist(name, dir.parent, parent);
         } else {
           final folder = SpotifyFolder(name, dir.parent, parent);
@@ -39,7 +44,6 @@ class SpogitRoot with SpotifyContainer {
           return folder;
         }
       }).toList();
-  }
 
   @override
   SpotifyPlaylist addPlaylist(String name) {
@@ -56,7 +60,7 @@ class SpogitRoot with SpotifyContainer {
   }
 
   void save() {
-    print('Root: Saving ${_playlists?.length ?? 0} items');
+    rootLocal.saveFile();
     _playlists?.forEach((playlist) => playlist.save());
   }
 
@@ -64,6 +68,33 @@ class SpogitRoot with SpotifyContainer {
   String toString() {
     return 'SpogitRoot{root: $root, meta: $meta, coverImage: $coverImage, _playlists: $_playlists}';
   }
+}
+
+/// Information in the `local` file in the stored Root with an identifier and
+/// the playlists/folders used. All but the ID are mutable.
+class RootLocal extends LocalStorage {
+  RootLocal(File file) : super(file);
+
+  String _id;
+
+  /// The randomized, local ID used to identify this.
+  String get id => _id ??= this['id'];
+
+  set id(String value) => this['id'] = value;
+
+  List<String> _tracking;
+
+  /// The IDs of the things that are being tracked.
+  List<String> get tracking => _tracking ??= List<String>.from(this['tracking']);
+
+  set tracking(List<String> value) => this['tracking'] = value;
+
+  String _revision;
+
+  /// The ETag of the last base revision used.
+  String get revision => _revision ??= this['revision'];
+
+  set revision(String value) => this['revision'] = value;
 }
 
 class SpotifyPlaylist extends Mappable {
@@ -97,11 +128,14 @@ class SpotifyPlaylist extends Mappable {
   /// The [name] is the name of the playlist. The [parentDirectory] is the
   /// filesystem directory of what this playlist's folder will be contained in.
   /// The [parentFolder] is the [SpotifyFolder] of the parent, this may be null.
-  SpotifyPlaylist(String name, Directory parentDirectory, [SpotifyFolder parentFolder])
+  SpotifyPlaylist(String name, Directory parentDirectory,
+      [SpotifyFolder parentFolder])
       : parent = parentFolder,
         coverImage = [parentDirectory, name, 'cover.png'].file,
-        _meta = [parentDirectory, name, 'meta.json'].file..createSync(recursive: true),
-        _songsFile = [parentDirectory, name, 'songs.md'].file..createSync(recursive: true),
+        _meta = [parentDirectory, name, 'meta.json'].file
+          ..createSync(recursive: true),
+        _songsFile = [parentDirectory, name, 'songs.md'].file
+          ..createSync(recursive: true),
         super([parentDirectory, name].directory) {
     meta;
   }
@@ -113,10 +147,15 @@ class SpotifyPlaylist extends Mappable {
 
   @override
   void save() {
-    print('Saving $this');
-    _meta.writeAsStringSync(jsonEncode(meta));
+    super.save();
 
-    _songsFile.writeAsStringSync(songs.map((song) => song.toLine()).join('\n'));
+    _meta
+      ..tryCreateSync()
+      ..writeAsStringSync(jsonEncode(meta));
+
+    _songsFile
+      ..tryCreateSync()
+      ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n'));
   }
 
   @override
@@ -126,7 +165,6 @@ class SpotifyPlaylist extends Mappable {
 }
 
 class SpotifyFolder extends Mappable with SpotifyContainer {
-
   @override
   String get name => root.uri.realName;
 
@@ -135,7 +173,8 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
 
   List<Mappable> children;
 
-  SpotifyFolder(String name, Directory parentDirectory, this.parent, [List<Mappable> children])
+  SpotifyFolder(String name, Directory parentDirectory, this.parent,
+      [List<Mappable> children])
       : children = children ?? <Mappable>[],
         super([parentDirectory, name].directory);
 
@@ -155,7 +194,8 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
 
   @override
   void save() {
-    print('Playlist ($this) saving ${children?.length ?? 0} children');
+    super.save();
+
     children?.forEach((mappable) => mappable.save());
   }
 
@@ -181,12 +221,11 @@ class SpotifySong {
   }
 }
 
-abstract class Mappable {
+abstract class Mappable extends LocalStorage {
   final Directory root;
-  final File _local;
 
   Mappable(this.root)
-      : _local = [root, 'local'].file..createSync(recursive: true);
+      : super([root, 'local'].file..createSync(recursive: true));
 
   String get name;
 
@@ -194,13 +233,11 @@ abstract class Mappable {
 
   String _spotifyId;
 
-  String get spotifyId =>
-      _spotifyId ??= access(tryJsonDecode(_local.readAsStringSync()), 'id') as String;
+  String get spotifyId => _spotifyId ??= this['id'];
 
-  set spotifyId(String id) =>
-      _local.writeAsStringSync(jsonEncode({'id': _spotifyId = id}));
+  set spotifyId(String id) => this['id'] = id;
 
-  void save();
+  void save() => saveFile();
 }
 
 extension MappableChecker on Directory {

@@ -14,7 +14,8 @@ class PlaylistManager {
   static const apiBase = 'https://api.spotify.com/v1';
 
   String get rootlistUrl =>
-      'https://spclient.wg.spotify.com/playlist/v2/user/${_requestManager.personalData.id}/rootlist';
+      'https://spclient.wg.spotify.com/playlist/v2/user/${_requestManager
+          .personalData.id}/rootlist';
 
   String get apiUrl => '$apiBase/users/${_requestManager.personalData.id}';
 
@@ -38,21 +39,22 @@ class PlaylistManager {
     return response.headers['etag'];
   }
 
-  Future<BaseRevision> analyzeBaseRevision() async {
+  /// Gets a revision of the users' Spotify playlist data. Without [revision]
+  /// specified, it will get the latest revision.
+  Future<BaseRevision> analyzeBaseRevision([String revision]) async {
     var response = await DriverRequest(
       method: RequestMethod.Get,
       token: _requestManager.authToken,
       uri: Uri.parse(rootlistUrl).replace(queryParameters: {
         'decorate': 'revision,length,attributes,timestamp,owner',
-        'market': 'from_token'
+        'market': 'from_token',
+        if (revision != null) ...{'revision': revision}
       }),
     ).send();
 
-    print('body ====');
-    print(response.body);
-
     if (response.statusCode != 200) {
-      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
+      throw 'Status ${response.statusCode}: ${response
+          .json['error']['message']}';
     }
 
     return BaseRevision.fromJson(response.json);
@@ -62,7 +64,7 @@ class PlaylistManager {
       FutureOr<Response> Function(BaseRevision) makeRequest,
       [bool useBase = true]) async {
     var response =
-        await makeRequest(useBase ? await analyzeBaseRevision() : null);
+    await makeRequest(useBase ? await analyzeBaseRevision() : null);
 
     if (response.statusCode >= 300) {
 //      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
@@ -77,7 +79,8 @@ class PlaylistManager {
     return basedRequest((baseRevision) {
       var movingElement = baseRevision.getElement(moving);
 
-      absolutePosition ??= (baseRevision.getIndexOf(toGroup)?.add(1) ?? 0) + offset;
+      absolutePosition ??=
+          (baseRevision.getIndexOf(toGroup)?.add(1) ?? 0) + offset;
       var fromIndex = movingElement.index;
 
       return DriverRequest(
@@ -112,7 +115,8 @@ class PlaylistManager {
     var id = '${randomHex(12)}000';
 
     return basedRequest((baseRevision) {
-      absolutePosition ??= (baseRevision.getIndexOf(toGroup)?.add(1) ?? 0) + offset;
+      absolutePosition ??=
+          (baseRevision.getIndexOf(toGroup)?.add(1) ?? 0) + offset;
       return DriverRequest(
         uri: Uri.parse('$rootlistUrl/changes'),
         token: _requestManager.authToken,
@@ -129,7 +133,7 @@ class PlaylistManager {
                       {
                         'attributes': {'timestamp': now},
                         'uri':
-                            'spotify:start-group:$id:${Uri.encodeComponent(name)}'
+                        'spotify:start-group:$id:${Uri.encodeComponent(name)}'
                       }
                     ]
                   }
@@ -154,25 +158,28 @@ class PlaylistManager {
           ]
         },
       ).send();
-    }).then((result) => {
-          ...result,
-          ...{'id': id}
-        });
+    }).then((result) =>
+    {
+      ...result,
+      ...{'id': id}
+    });
   }
 
-  Future<Map<String, dynamic>> addTracks(
-      String playlist, List<String> trackIds) {
+  Future<Map<String, dynamic>> addTracks(String playlist,
+      List<String> trackIds) {
     return DriverRequest(
       uri: Uri.parse('$apiBase/playlists/${playlist.parseId}/tracks'),
       token: _requestManager.authToken,
-      body: {'uris': trackIds.map((str) => 'spotify:track:${str.parseId}').toList()},
+      body: {
+        'uris': trackIds.map((str) => 'spotify:track:${str.parseId}').toList()
+      },
     ).send().then((res) => res.json);
   }
 
   /// Removes tracks from the given [playlist] ID. [trackIds] should contain a
   /// list of track IDs to remove. These do not have to be parsed IDs.
-  Future<Map<String, dynamic>> removeTracks(
-      String playlist, List<String> trackIds) {
+  Future<Map<String, dynamic>> removeTracks(String playlist,
+      List<String> trackIds) {
     trackIds = trackIds.map((str) => str.parseId).toList();
 
     return getPlaylistInfo(playlist).then((info) {
@@ -183,7 +190,7 @@ class PlaylistManager {
           .map((id) => id.parseId)
           .toList()
           .asMap()
-            ..removeWhere((i, id) => !trackIds.contains(id));
+        ..removeWhere((i, id) => !trackIds.contains(id));
 
       return DriverRequest(
         method: RequestMethod.Delete,
@@ -218,7 +225,8 @@ class PlaylistManager {
 
   Future<Map<String, dynamic>> createPlaylist(String name) async {
     return basedRequest(
-        (_) => DriverRequest(
+            (_) =>
+            DriverRequest(
               uri: Uri.parse('$apiUrl/playlists'),
               token: _requestManager.authToken,
               body: {
@@ -230,8 +238,12 @@ class PlaylistManager {
   }
 }
 
+/// A flat, direct representation of the fetched base revision
 class BaseRevision {
+  /// The Spotify-generated revision ID
   final String revision;
+
+  /// A flat list of [RevisionElements] in the current revision
   final List<RevisionElement> elements;
 
   BaseRevision.fromJson(Map<String, dynamic> json)
@@ -246,32 +258,32 @@ class BaseRevision {
     }
 
     return List<RevisionElement>.from(json['items'].asMap()?.map((i, elem) {
-          var metaVal = jsonify(meta[i]);
-          var itemVal = elem;
+      var metaVal = jsonify(meta[i]);
+      var itemVal = elem;
 
-          var attributes = metaVal.isNotEmpty
-              ? jsonify({...metaVal['attributes'], ...itemVal['attributes']})
-              : itemVal['attributes'];
-          metaVal.remove('attributes');
-          itemVal.remove('attributes');
+      var attributes = metaVal.isNotEmpty
+          ? jsonify({...metaVal['attributes'], ...itemVal['attributes']})
+          : itemVal['attributes'];
+      metaVal.remove('attributes');
+      itemVal.remove('attributes');
 
-          var uri = itemVal['uri'] as String;
-          var id = uri.parseId;
-          var type = uri.parseElementType;
-          var name = type == ElementType.FolderStart
-              ? Uri.decodeComponent(uri.split(':')[3].replaceAll('+', ' '))
-              : null;
+      var uri = itemVal['uri'] as String;
+      var id = uri.parseId;
+      var type = uri.parseElementType;
+      var name = type == ElementType.FolderStart
+          ? Uri.decodeComponent(uri.split(':')[3].replaceAll('+', ' '))
+          : null;
 
-          return MapEntry(
+      return MapEntry(
+          i,
+          RevisionElement.fromJson(
               i,
-              RevisionElement.fromJson(
-                  i,
-                  type == ElementType.FolderStart ? children[id] : 0,
-                  jsonify({...metaVal, ...itemVal, ...attributes}),
-                  name: name,
-                  id: id,
-                  type: type));
-        })?.values ??
+              type == ElementType.FolderStart ? children[id] : 0,
+              jsonify({...metaVal, ...itemVal, ...attributes}),
+              name: name,
+              id: id,
+              type: type));
+    })?.values ??
         {});
   }
 
@@ -313,6 +325,50 @@ class BaseRevision {
   int getIndexOf(String id) => getElement(id)?.index;
 
   int getTrackCountOf(String id) => getElement(id)?.length;
+
+  int getHash({String id, RevisionElement element}) {
+    element ??= getElement(id);
+    var totalHash = 0;
+
+    void append(int number) {
+      var breaking = (number.bitLength / 8).ceil();
+      for (var i = 0; i < breaking; i++) {
+        totalHash += number & 0xFF;
+        number >>= 8;
+        totalHash <<= 8;
+      }
+    }
+
+//    print('\nGetting hash for ${element.name} (#${element.id})');
+    for (var i = element.index; i < element.index + element.moveCount; i++) {
+      var curr = elements[i];
+//      print('element ${curr.name} (#${element.id})');
+      switch(curr.type) {
+        case ElementType.Playlist:
+          append(0x00);
+//          print('1 total = ${totalHash.toRadixString(16)}');
+          append(curr.length);
+//          print('1 total = ${totalHash.toRadixString(16)}');
+          append(0x00);
+//          print('1 total = ${totalHash.toRadixString(16)}');
+          append(curr.id.hashCode);
+//          print('1 total = ${totalHash.toRadixString(16)}');
+          append(0x00);
+//          print('1 total = ${totalHash.toRadixString(16)}');
+          break;
+        case ElementType.FolderStart:
+          append(0x01);
+//          print('2 total = ${totalHash.toRadixString(16)}');
+          break;
+        case ElementType.FolderEnd:
+          append(0x02);
+//          print('3 total = ${totalHash.toRadixString(16)}');
+          break;
+      }
+    }
+
+    return totalHash;
+  }
 
   @override
   String toString() {
@@ -364,12 +420,25 @@ class RevisionElement {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RevisionElement &&
-          runtimeType == other.runtimeType &&
-          index == other.index;
+          other is RevisionElement &&
+              runtimeType == other.runtimeType &&
+              index == other.index &&
+              length == other.length &&
+              children == other.children &&
+              timestamp == other.timestamp &&
+              public == other.public &&
+              id == other.id &&
+              type == other.type;
 
   @override
-  int get hashCode => index.hashCode;
+  int get hashCode =>
+      index.hashCode ^
+      length.hashCode ^
+      children.hashCode ^
+      timestamp.hashCode ^
+      public.hashCode ^
+      id.hashCode ^
+      type.hashCode;
 
   @override
   String toString() {
@@ -391,7 +460,8 @@ extension ParsingUtils on String {
 
   String get parseId => splitOrThis(':', 2);
 
-  ElementType get parseElementType => const {
+  ElementType get parseElementType =>
+      const {
         'playlist': ElementType.Playlist,
         'start-group': ElementType.FolderStart,
         'end-group': ElementType.FolderEnd

@@ -55,7 +55,12 @@ window.fetch = function() {
     ''', []);
 
     (await getElement(_driver, By.cssSelector('a[href="/collection"]')))
-        .click();
+        ?.click();
+
+    if (_driver.findElements(By.cssSelector('div[aria-label="Something went wrong"] button')).isNotEmpty) {
+      print('Un on, restart your shit');
+      exit(0);
+    }
 
     return authCompleter.future;
   }

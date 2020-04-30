@@ -9,7 +9,6 @@ import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
 
 class Spogit {
-
   final DriverAPI driverAPI;
 
   PlaylistManager get playlistManager => driverAPI?.playlistManager;
@@ -36,12 +35,99 @@ class Spogit {
 //
 //    });
 
-//    // first,   tld playlist
-//    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), ['spotify:start-group:b623551dee2c000:first', 'spotify:playlist:5LtVZsSVm60F8lHAWGnute']);
-//    await linkedStuff.initElement();
+    var name = 'Test Local';
 
-      final local = LinkedPlaylist.fromLocal(driverAPI, [path, 'Test Local'].directory);
-      await local.initLocal();
+    var elements = [
+      'spotify:playlist:77TYGLTCm45nA9SOT2kAaj',
+      'spotify:start-group:27345c6f477d000:first'
+    ];
+
+//    // first,   tld playlist
+//    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), elements);
+//    await linkedStuff.initElement();
+//
+//    exit(0);
+
+//    path.listSync().forEach((child) => child.deleteSync(recursive: true));
+
+    var currRevision = await playlistManager.analyzeBaseRevision();
+
+    final manager = LocalManager(driverAPI, path);
+
+    final existing = manager.getExistingRoots(currRevision);
+
+    print('Got ${existing.length} existing');
+
+    for (var exist in existing) {
+      await exist.initElement();
+      print('\nExisting:');
+      print(exist.root.rootLocal.id);
+      print(exist.root);
+    }
+
+    var previousHashes = <LinkedPlaylist, Map<String, int>>{};
+
+    changeWatcher.watchChanges((revision) async {
+      print('It has changed on the Spotify side!');
+
+      var adding = previousHashes.isEmpty;
+      for (var exist in existing) {
+        // The fully qualified track/playlist ID and its hash
+        var theseHashes = <String, int>{};
+        var tracking = exist.root.rootLocal.tracking;
+
+        if (previousHashes.isNotEmpty &&
+            previousHashes[exist].length != tracking.length) {
+          print('Tracking lengths to not match up! Pulling from remote...');
+        } else {
+          for (var track in tracking) {
+            var hash = revision.getHash(id: track);
+            theseHashes[track] = hash;
+          }
+
+          if (!adding) {
+            var prevHash = {...previousHashes.putIfAbsent(exist, () => {})};
+
+            var difference = getDifference(prevHash, theseHashes);
+            print(
+                'previous = ${prevHash.keys.toList().map((k) => '$k: ${prevHash[k].toRadixString(16)}').join(', ')}');
+            print(
+                'theseHashes = ${theseHashes.keys.toList().map((k) => '$k: ${theseHashes[k].toRadixString(16)}').join(', ')}');
+
+            if (difference.isNotEmpty) {
+              print(
+                  'Difference between hashes! Reloading ${exist.root.root.uri.realName} tracking: $difference');
+            } else {
+              print('No hash difference for ${exist.root.root.uri.realName}');
+            }
+          }
+        }
+
+        previousHashes[exist] = theseHashes;
+        exist.root.rootLocal.revision = revision.revision;
+      }
+
+//      var linkedStuff = LinkedPlaylist.fromRemote(
+//          driverAPI, name, revision, elements);
+//
+//      await linkedStuff.initElement();
+    });
+  }
+
+  List<String> getDifference(Map<String, int> first, Map<String, int> second) {
+    var res = <String>{};
+    void checkMaps(Map<String, int> one, Map<String, int> two) {
+      for (var id in one.keys) {
+        if (!two.containsKey(id) || two[id] != one[id]) {
+          res.add(id);
+        }
+      }
+    }
+
+    checkMaps(first, second);
+    checkMaps(second, first);
+
+    return res.toList();
   }
 
 //  void startDaemon(Directory path) {
@@ -75,7 +161,5 @@ class Spogit {
 
   /// Creates a Spogit playlist from an existing Spotify playlist. [playlistId]
   /// is the raw playlist ID.
-  Future<void> createLinked(String playlistId) async {
-
-  }
+  Future<void> createLinked(String playlistId) async {}
 }

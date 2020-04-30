@@ -109,12 +109,6 @@ extension PathUtils on List<dynamic> {
   Directory get directory => Directory(separatorFix);
 }
 
-extension SafeUtils<T> on List<T> {
-  T get safeLast => isNotEmpty ? last : null;
-
-  T get safeFirst => isNotEmpty ? first : null;
-}
-
 extension ASCIIShit on int {
   bool get isASCII => (this == 10 || this == 13 || (this >= 32 && this <= 126));
 
@@ -139,5 +133,81 @@ extension UriUtils on Uri {
     }
 
     return pathSegments.last;
+  }
+}
+
+// Extensions meant for general safety/ease of use of stuff
+
+extension SafeUtils<T> on List<T> {
+  T get safeLast => isNotEmpty ? last : null;
+
+  T get safeFirst => isNotEmpty ? first : null;
+
+  /// If the current list contains all elements as the given [elements].
+  bool containsAll(List<T> elements) {
+    for (var value in elements) {
+      if (!contains(value)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /// If both the current and given [elements] contains only the same elements. Order
+  /// is not mandatory.
+  bool elementsEqual(List<T> elements) =>
+      elements.length == length && containsAll(elements) && elements.containsAll(this);
+}
+
+extension DirUtils on Directory {
+  void tryCreateSync([bool recursive = true]) {
+    if (existsSync()) {
+      createSync(recursive: recursive);
+    }
+  }
+
+  Future<void> tryCreate([bool recursive = true]) async =>
+      exists().then((exists) async {
+        if (!exists) {
+          await create(recursive: recursive);
+        }
+      });
+}
+
+extension FileUtils on File {
+  void tryCreateSync([bool recursive = true]) {
+    if (!existsSync()) {
+      createSync(recursive: recursive);
+    }
+  }
+
+  Future<void> tryCreate([bool recursive = true]) async =>
+      exists().then((exists) async {
+        if (!exists) {
+          await create(recursive: recursive);
+        }
+      });
+
+  String tryReadSync({bool create = true, String def = ''}) {
+    if (existsSync()) {
+      return readAsStringSync();
+    } else if (create) {
+      createSync(recursive: true);
+    }
+
+    return def;
+  }
+
+  Future<String> tryRead({bool create = true, String def = ''}) async {
+    return exists().then((exists) async {
+      if (exists) {
+        return readAsString();
+      } else if (create) {
+        await this.create(recursive: true);
+      }
+
+      return def;
+    });
   }
 }
