@@ -73,9 +73,13 @@ class LinkedPlaylist {
 
     print('Updating local');
 
+    updateElements(baseRevision, elementIds);
+  }
+
+  void updateElements(BaseRevision baseRevision, List<String> elementIds) {
     elements = <RevisionElement>[];
 
-    elementIds = elementIds.map((id) => id.parseId).toList();
+    elementIds.parseAll();
     for (var element in baseRevision.elements
         .where((element) => elementIds.contains(element.id))) {
       if (element.type == ElementType.Playlist) {
@@ -121,26 +125,27 @@ class LinkedPlaylist {
       }
     }
 
-    var pl = root.playlists;
+    var pl = root.children;
     print('playlist  = $pl');
     pl.forEach((child) => traverse(child, []));
   }
 
-  void traverse(Function(Mappable, List<SpotifyFolder>) callback) {
-    void bruh(Mappable mappable, List<SpotifyFolder> parents) {
-      if (mappable is SpotifyPlaylist) {
-        callback(mappable, parents);
-      } else if (mappable is SpotifyFolder) {
-        mappable.children.forEach((child) {
-          callback(child, parents);
-          bruh(child, [...parents, mappable]);
-        });
-      }
-    }
+//  void traverse(Function(Mappable, List<SpotifyFolder>) callback) {
+//    void bruh(Mappable mappable, List<SpotifyFolder> parents) {
+//      if (mappable is SpotifyPlaylist) {
+//        callback(mappable, parents);
+//      } else if (mappable is SpotifyFolder) {
+//        mappable.children.forEach((child) {
+//          callback(child, parents);
+//          bruh(child, [...parents, mappable]);
+//        });
+//      }
+//    }
+//
+//    root.children.forEach((child) => bruh(child, []));
+//  }
 
-    root.playlists.forEach((child) => bruh(child, []));
-  }
-
+  /// Initializes the [root] with the set [elements] via [updateElements].
   Future<void> initElement() async {
     print('Local list comprises of:');
     print(elements.map((el) => el.toString()).join('\n'));
@@ -149,6 +154,7 @@ class LinkedPlaylist {
 
     for (var element in elements) {
       var id = element.id;
+      print('id = $id');
       switch (element.type) {
         case ElementType.Playlist:
           var playlistDetails =
@@ -177,9 +183,97 @@ class LinkedPlaylist {
 
   Future<void> refreshFromRemote() async {
     print('bout to ${root.root.path}');
-    await root.root.delete(recursive: true);
+    root.root.deleteSync(recursive: true);
     print('done');
     await initElement();
     root.save();
   }
+
+  Future<void> pullRemote(BaseRevision baseRevision, List<String> ids) async {
+//    ids.parseAll();
+    print('mappablesssssssssssssss =');
+    print(root.children.map((map) => map.spotifyId).join(', '));
+    var mappables = root.children.where((mappable) => ids.contains(mappable.spotifyId));
+
+
+    if (mappables.isEmpty) {
+      print('Nvm, mappables was empty');
+      return;
+    }
+
+
+    // So currently the local elements (flat) have not been updated and are out of date.
+    // baseRevision is updated, with a flat element list, and only "ids" should be updated
+    // So we need to take local root and replace the overlapping stuff
+
+
+    print('Outdated elements: $elements');
+
+    elements.clear();
+    elements.addAll(baseRevision.elements);
+
+    var idMap = elements.where((element) => element.type != ElementType.FolderEnd && ids.contains(element.id)).toList().asMap().map((i, element) => MapEntry(element.id, element));
+
+    print('about to replace shit, elements are: $elements');
+
+    for (var id in ids) {
+      print('replacing $id');
+      var element = idMap[id];
+      print('elemenbt = $element');
+      if (element.type == ElementType.Playlist) {
+          var playlistDetails = await driverAPI.playlistManager.getPlaylistInfo(id);
+
+          var playlist = root.replacePlaylist(id)
+            ..name = element.name
+            ..description = playlistDetails['description']
+            ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
+                .map((track) => SpotifySong.create(track['track']['id'])));
+
+          await playlist.root.delete(recursive: true);
+        } else if (element.type == ElementType.FolderStart) {
+          var replaced = root.replaceFolder(id);
+          print('sublisting [${element.index}, ${element.index + element.moveCount}]');
+          await parseElementsToContainer(replaced, elements.sublist(element.index, element.index + element.moveCount));
+          await replaced.root.delete(recursive: true);
+      }
+    }
+
+
+
+    print('Local list comprises of:');
+    print(elements.map((el) => el.toString()).join('\n'));
+
+
+    root.save();
+
+    print('root =\n$root');
+  }
+
+  Future<void> parseElementsToContainer(SpotifyContainer container, List<RevisionElement> elements) async {
+    SpotifyContainer current = root;
+    for (var element in elements) {
+      var id = element.id;
+      switch (element.type) {
+        case ElementType.Playlist:
+          var playlistDetails =
+              await driverAPI.playlistManager.getPlaylistInfo(id);
+
+          current.addPlaylist(element.name)
+            ..spotifyId = id
+            ..name = element.name
+            ..description = playlistDetails['description']
+            ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
+                .map((track) => SpotifySong.create(track['track']['id'])));
+          break;
+        case ElementType.FolderStart:
+          current = (current.addFolder(element.name)..spotifyId = id);
+          break;
+        case ElementType.FolderEnd:
+          current = current.parent;
+          break;
+      }
+    }
+  }
+
+
 }

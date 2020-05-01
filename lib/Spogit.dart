@@ -43,8 +43,8 @@ class Spogit {
     ];
 
 //    // first,   tld playlist
-//    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), elements);
-//    await linkedStuff.initElement();
+    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), elements);
+    await linkedStuff.initElement();
 //
 //    exit(0);
 
@@ -58,6 +58,10 @@ class Spogit {
 
     print('Got ${existing.length} existing');
 
+    print('waiting 10 sec....');
+    sleep(Duration(seconds: 3));
+    print('done!');
+
     for (var exist in existing) {
       await exist.initElement();
       print('\nExisting:');
@@ -65,69 +69,11 @@ class Spogit {
       print(exist.root);
     }
 
-    var previousHashes = <LinkedPlaylist, Map<String, int>>{};
-
-    changeWatcher.watchChanges((revision) async {
-      print('It has changed on the Spotify side!');
-
-      var adding = previousHashes.isEmpty;
-      for (var exist in existing) {
-        // The fully qualified track/playlist ID and its hash
-        var theseHashes = <String, int>{};
-        var tracking = exist.root.rootLocal.tracking;
-
-        if (previousHashes.isNotEmpty &&
-            previousHashes[exist].length != tracking.length) {
-          print('Tracking lengths to not match up! Pulling from remote...');
-        } else {
-          for (var track in tracking) {
-            var hash = revision.getHash(id: track);
-            theseHashes[track] = hash;
-          }
-
-          if (!adding) {
-            var prevHash = {...previousHashes.putIfAbsent(exist, () => {})};
-
-            var difference = getDifference(prevHash, theseHashes);
-            print(
-                'previous = ${prevHash.keys.toList().map((k) => '$k: ${prevHash[k].toRadixString(16)}').join(', ')}');
-            print(
-                'theseHashes = ${theseHashes.keys.toList().map((k) => '$k: ${theseHashes[k].toRadixString(16)}').join(', ')}');
-
-            if (difference.isNotEmpty) {
-              print(
-                  'Difference between hashes! Reloading ${exist.root.root.uri.realName} tracking: $difference');
-            } else {
-              print('No hash difference for ${exist.root.root.uri.realName}');
-            }
-          }
-        }
-
-        previousHashes[exist] = theseHashes;
-        exist.root.rootLocal.revision = revision.revision;
-      }
-
-//      var linkedStuff = LinkedPlaylist.fromRemote(
-//          driverAPI, name, revision, elements);
-//
-//      await linkedStuff.initElement();
+    print('bnoutta watch');
+    changeWatcher.watchChanges(currRevision, existing, (baseRevision, linkedPlaylist, ids) {
+      print('Pulling remote');
+      linkedPlaylist.pullRemote(baseRevision, ids);
     });
-  }
-
-  List<String> getDifference(Map<String, int> first, Map<String, int> second) {
-    var res = <String>{};
-    void checkMaps(Map<String, int> one, Map<String, int> two) {
-      for (var id in one.keys) {
-        if (!two.containsKey(id) || two[id] != one[id]) {
-          res.add(id);
-        }
-      }
-    }
-
-    checkMaps(first, second);
-    checkMaps(second, first);
-
-    return res.toList();
   }
 
 //  void startDaemon(Directory path) {

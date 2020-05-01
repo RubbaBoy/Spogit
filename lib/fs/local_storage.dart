@@ -5,23 +5,28 @@ import 'package:Spogit/utility.dart';
 
 abstract class LocalStorage {
   final File _file;
-  Map<String, dynamic> _json;
+  final Map<String, dynamic> _json;
+  bool modified = false;
 
-  LocalStorage(this._file);
+  LocalStorage(this._file) : _json = {...tryJsonDecode(_file.tryReadSync())};
 
   void saveFile() {
-    _file.tryCreateSync();
-    _file.writeAsStringSync(jsonEncode(_json));
+    if (modified) {
+      modified = false;
+      print('Saving ${_file.path} = ${jsonEncode(_json)}');
+      _file.tryCreateSync();
+      _file.writeAsStringSync(jsonEncode(_json));
+    }
   }
 
   dynamic operator [](key) {
-    _json ??= {...tryJsonDecode(_file.tryReadSync())};
     return _json[key];
   }
 
   void operator []=(key, value) {
-    _json ??= {...tryJsonDecode(_file.tryReadSync())};
-    _json[key] = value;
-    _file.writeAsStringSync(jsonEncode(_json));
+    if (_json[key] != value) {
+      modified = true;
+      _json[key] = value;
+    }
   }
 }

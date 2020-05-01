@@ -26,6 +26,28 @@ class PlaylistManager {
     return PlaylistManager._(driver, requestManager);
   }
 
+  /// Gets all playlist IDs and their snapshot IDs.
+  Future<Map<String, String>> getPlaylistSnapshots() async {
+    // TODO: Paginate these for proper usage!
+    var response = await DriverRequest(
+      token: _requestManager.authToken,
+      uri: Uri.parse('$apiUrl/playlists').replace(queryParameters: {
+        'limit': 50,
+        'offset': 0
+      })
+    );
+
+    var res = <String, String>{};
+    for (var item in response.body['items']) {
+      res[item['id']] = item['snapshot_id'];
+    }
+
+    return res;
+  }
+
+
+  /// Gets the ETag of the base revision to detect if any playlist order has
+  /// changed yet.
   Future<String> baseRevisionETag() async {
     var response = await DriverRequest(
       method: RequestMethod.Head,

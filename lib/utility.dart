@@ -63,7 +63,7 @@ Map<String, dynamic> jsonify(Map<dynamic, dynamic> map) =>
 Map<String, dynamic> tryJsonDecode(String json,
     [dynamic def = const <String, dynamic>{}]) {
   try {
-    return jsonDecode(json);
+    return jsonDecode(json) ?? def;
   } on FormatException catch (e) {
     return def;
   }
@@ -157,7 +157,9 @@ extension SafeUtils<T> on List<T> {
   /// If both the current and given [elements] contains only the same elements. Order
   /// is not mandatory.
   bool elementsEqual(List<T> elements) =>
-      elements.length == length && containsAll(elements) && elements.containsAll(this);
+      elements.length == length &&
+      containsAll(elements) &&
+      elements.containsAll(this);
 }
 
 extension DirUtils on Directory {
@@ -173,6 +175,14 @@ extension DirUtils on Directory {
           await create(recursive: recursive);
         }
       });
+
+  /// Deletes all children synchronously, preserving the current [Directory].
+  void deleteChildrenSync() =>
+      listSync().forEach((entity) => entity.deleteSync());
+
+//  /// Deletes all children asynchronously, preserving the current [Directory].
+//  Future<void> deleteChildren() async =>
+//      (await list().toList()).forEach((entity) async => await entity.delete());
 }
 
 extension FileUtils on File {

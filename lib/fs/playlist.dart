@@ -1,29 +1,32 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/local_storage.dart';
 import 'package:Spogit/utility.dart';
 
 class SpogitRoot with SpotifyContainer {
-  final Directory root;
   final RootLocal rootLocal;
   final File meta;
   final File coverImage;
 
   @override
+  final Directory root;
+
+  @override
   SpotifyContainer get parent => null;
 
-  List<Mappable> _playlists;
+  List<Mappable> _children;
 
-  /// A nested list of [Mappable]s in the directory
-  List<Mappable> get playlists => _playlists ??= _traverseDir(root, null);
+  @override
+  List<Mappable> get children => _children ??= _traverseDir(root, null);
 
   SpogitRoot(this.root,
       {bool creating = false, List<String> tracking = const []})
       : rootLocal = RootLocal([root, 'local'].file),
         meta = [root, 'meta.json'].file..tryCreateSync(),
         coverImage = [root, 'cover.png'].file {
-    playlists;
+    children;
     if (creating) {
       rootLocal
         ..id = randomHex(16)
@@ -45,28 +48,14 @@ class SpogitRoot with SpotifyContainer {
         }
       }).toList();
 
-  @override
-  SpotifyPlaylist addPlaylist(String name) {
-    var playlist = SpotifyPlaylist(name, root);
-    _playlists?.add(playlist);
-    return playlist;
-  }
-
-  @override
-  SpotifyFolder addFolder(String name) {
-    var folder = SpotifyFolder(name, root, this);
-    _playlists?.add(folder);
-    return folder;
-  }
-
   void save() {
     rootLocal.saveFile();
-    _playlists?.forEach((playlist) => playlist.save());
+    _children?.forEach((playlist) => playlist.save());
   }
 
   @override
   String toString() {
-    return 'SpogitRoot{root: $root, meta: $meta, coverImage: $coverImage, _playlists: $_playlists}';
+    return 'SpogitRoot{root: $root, meta: $meta, coverImage: $coverImage, _playlists: $_children}';
   }
 }
 
@@ -85,7 +74,8 @@ class RootLocal extends LocalStorage {
   List<String> _tracking;
 
   /// The IDs of the things that are being tracked.
-  List<String> get tracking => _tracking ??= List<String>.from(this['tracking']);
+  List<String> get tracking =>
+      _tracking ??= List<String>.from(this['tracking']);
 
   set tracking(List<String> value) => this['tracking'] = value;
 
@@ -171,26 +161,13 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
   @override
   final SpotifyContainer parent;
 
+  @override
   List<Mappable> children;
 
   SpotifyFolder(String name, Directory parentDirectory, this.parent,
       [List<Mappable> children])
       : children = children ?? <Mappable>[],
         super([parentDirectory, name].directory);
-
-  @override
-  SpotifyPlaylist addPlaylist(String name) {
-    var playlist = SpotifyPlaylist(name, root, this);
-    children?.add(playlist);
-    return playlist;
-  }
-
-  @override
-  SpotifyFolder addFolder(String name) {
-    var folder = SpotifyFolder(name, root, this);
-    children?.add(folder);
-    return folder;
-  }
 
   @override
   void save() {
@@ -248,9 +225,59 @@ extension MappableChecker on Directory {
 
 /// An object that stores playlists and folders.
 abstract class SpotifyContainer {
+  /// The directory holding any data related to this container, including children.
+  Directory get root;
+
+  /// The parent of the container
   SpotifyContainer get parent;
 
-  SpotifyPlaylist addPlaylist(String name);
+  /// A nested list of [Mappable]s in the container
+  List<Mappable> get children;
 
-  SpotifyFolder addFolder(String name);
+  /// Creates a [SpotifyPlaylist] in the current container with the given name.
+  SpotifyPlaylist addPlaylist(String name) =>
+      _createMappable(name, () => SpotifyPlaylist(name, root));
+
+  /// Creates a [SpotifyFolder] in the current container with the given name.
+  SpotifyFolder addFolder(String name) =>
+      _createMappable(name, () => SpotifyFolder(name, root, this));
+
+  /// Replaces a given [SpotifyPlaylist] by an existing [id]. This ID should be
+  /// directly in the current container and not in any child. If no direct child
+  /// is found with the given ID, it is added to the end of the child list.
+  SpotifyPlaylist replacePlaylist(String id) =>
+      _replaceMappable(id, (name) => SpotifyPlaylist(name, root))
+        ..spotifyId = id;
+
+  /// Replaces a given [SpotifyFolder] by an existing [id]. This ID should be
+  /// directly in the current container and not in any child. If no direct child
+  /// is found with the given ID, it is added to the end of the child list.
+  SpotifyFolder replaceFolder(String id) =>
+      _replaceMappable(id, (name) => SpotifyFolder(name, root, this))
+        ..spotifyId = id;
+
+  T _createMappable<T extends Mappable>(
+      String name, T Function() createMappable) {
+    var playlist = createMappable();
+    children?.add(playlist);
+    return playlist;
+  }
+
+  T _replaceMappable<T extends Mappable>(
+      String id, T Function(String) createMappable) {
+    var foundMappable = children.indexWhere((map) => map.spotifyId == id);
+    if (foundMappable == -1) {
+      var playlist = createMappable(null);
+      children.add(playlist);
+      return playlist;
+    } else {
+      var playlist = createMappable(children[foundMappable]?.name);
+      children.setAll(foundMappable, [playlist]);
+      return playlist;
+    }
+  }
+}
+
+extension IDUtils on List<String> {
+  void parseAll() => replaceRange(0, length, map((s) => s.parseId));
 }
