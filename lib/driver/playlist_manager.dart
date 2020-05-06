@@ -30,15 +30,16 @@ class PlaylistManager {
   Future<Map<String, String>> getPlaylistSnapshots() async {
     // TODO: Paginate these for proper usage!
     var response = await DriverRequest(
+      method: RequestMethod.Get,
       token: _requestManager.authToken,
       uri: Uri.parse('$apiUrl/playlists').replace(queryParameters: {
-        'limit': 50,
-        'offset': 0
+        'limit': '50',
+        'offset': '0'
       })
-    );
+    ).send();
 
     var res = <String, String>{};
-    for (var item in response.body['items']) {
+    for (var item in response.json['items']) {
       res[item['id']] = item['snapshot_id'];
     }
 

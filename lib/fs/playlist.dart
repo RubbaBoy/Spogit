@@ -92,6 +92,9 @@ class SpotifyPlaylist extends Mappable {
   final File _songsFile;
   final File _meta;
 
+  int metaHash = 0;
+  int songsHash = 0;
+
   @override
   final SpotifyFolder parent;
 
@@ -139,13 +142,22 @@ class SpotifyPlaylist extends Mappable {
   void save() {
     super.save();
 
-    _meta
-      ..tryCreateSync()
-      ..writeAsStringSync(jsonEncode(meta));
+    var currMetaHash = _metaJson?.customHash;
+    if (metaHash != 0 && metaHash != currMetaHash) {
+      _meta
+        ..tryCreateSync()
+        ..writeAsStringSync(jsonEncode(meta));
+    }
 
-    _songsFile
-      ..tryCreateSync()
-      ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n'));
+    var currSongsHash = _songs?.customHash;
+    if (songsHash != 0 && songsHash != currSongsHash) {
+      _songsFile
+        ..tryCreateSync()
+        ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n'));
+    }
+
+    metaHash = currMetaHash;
+    songsHash = currSongsHash;
   }
 
   @override
@@ -192,6 +204,16 @@ class SpotifySong {
 
   String toLine() => id;
 
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          other is SpotifySong && runtimeType == other.runtimeType &&
+              id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
   @override
   String toString() {
     return 'SpotifySong{id: $id}';
@@ -233,6 +255,34 @@ abstract class SpotifyContainer {
 
   /// A nested list of [Mappable]s in the container
   List<Mappable> get children;
+
+  Mappable searchForId(String id) {
+    id = id.parseId;
+    Mappable traverse(Mappable mappable) {
+      if (mappable.spotifyId == id) {
+        return mappable;
+      }
+
+      if (mappable is SpotifyFolder) {
+        for (var child in mappable.children) {
+          var traversed = traverse(child);
+          if (traversed != null) {
+            return traversed;
+          }
+        }
+      }
+      return null;
+    }
+
+    for (var child in children) {
+      var traversed = traverse(child);
+      if (traversed != null) {
+        return traversed;
+      }
+    }
+
+    return null;
+  }
 
   /// Creates a [SpotifyPlaylist] in the current container with the given name.
   SpotifyPlaylist addPlaylist(String name) =>

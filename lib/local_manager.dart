@@ -8,12 +8,13 @@ import 'package:Spogit/utility.dart';
 class LocalManager {
   final DriverAPI driverAPI;
   final Directory root;
+  final List<LinkedPlaylist> linkedPlaylists = [];
 
   LocalManager(this.driverAPI, this.root);
 
   /// Should be invoked once at the beginning for initialization.
   List<LinkedPlaylist> getExistingRoots(BaseRevision baseRevision) {
-    var res = <LinkedPlaylist>[];
+    linkedPlaylists.clear();
     for (var dir in root.listSync()) {
       if ([dir, 'local'].file.existsSync()) {
         print('Found a directory with local in it: ${dir.path}');
@@ -31,10 +32,11 @@ class LocalManager {
           linked.refreshFromRemote();
         }
 
-        res.add(linked);
+        linkedPlaylists.add(linked);
       }
     }
-    return res;
+
+    return linkedPlaylists;
   }
 }
 
@@ -75,6 +77,8 @@ class LinkedPlaylist {
 
     updateElements(baseRevision, elementIds);
   }
+
+
 
   void updateElements(BaseRevision baseRevision, List<String> elementIds) {
     elements = <RevisionElement>[];

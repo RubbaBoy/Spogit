@@ -4,9 +4,8 @@ import 'dart:io';
 import 'package:Spogit/change_watcher.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
-import 'package:Spogit/file_watcher.dart';
+import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/local_manager.dart';
-import 'package:Spogit/utility.dart';
 
 class Spogit {
   final DriverAPI driverAPI;
@@ -23,17 +22,6 @@ class Spogit {
 
   Future<void> start(Directory path) async {
     final changeWatcher = ChangeWatcher(driverAPI);
-    final fileWatcher = FileWatcher(path);
-
-//    changeWatcher.watchChanges((baseRevision) {
-//      for (var value in baseRevision.elements) {
-//
-//      }
-//    });
-//
-//    fileWatcher.listenSpogit((root) {
-//
-//    });
 
     var name = 'Test Local';
 
@@ -43,8 +31,8 @@ class Spogit {
     ];
 
 //    // first,   tld playlist
-    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), elements);
-    await linkedStuff.initElement();
+//    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), elements);
+//    await linkedStuff.initElement();
 //
 //    exit(0);
 
@@ -58,10 +46,6 @@ class Spogit {
 
     print('Got ${existing.length} existing');
 
-    print('waiting 10 sec....');
-    sleep(Duration(seconds: 3));
-    print('done!');
-
     for (var exist in existing) {
       await exist.initElement();
       print('\nExisting:');
@@ -69,10 +53,34 @@ class Spogit {
       print(exist.root);
     }
 
-    print('bnoutta watch');
-    changeWatcher.watchChanges(currRevision, existing, (baseRevision, linkedPlaylist, ids) {
+    changeWatcher.watchChanges(currRevision, existing,
+        (baseRevision, linkedPlaylist, ids) {
       print('Pulling remote');
       linkedPlaylist.pullRemote(baseRevision, ids);
+    });
+
+    print('Watching for playlist changes...');
+    changeWatcher.watchPlaylistChanges((changed) async {
+      for (var id in changed.keys) {
+        bruh:
+        for (var exist in existing) {
+          var searched = exist.root.searchForId(id) as SpotifyPlaylist;
+          if (searched != null) {
+            var playlistDetails = await playlistManager.getPlaylistInfo(id);
+
+            searched
+              ..description = playlistDetails['description']
+              ..songs = List<SpotifySong>.from(playlistDetails['tracks']
+                      ['items']
+                  .map((track) => SpotifySong.create(track['track']['id'])))
+              ..save();
+
+            break bruh;
+          }
+        }
+      }
+
+      print('Updated change stuff');
     });
   }
 

@@ -221,3 +221,20 @@ extension FileUtils on File {
     });
   }
 }
+
+extension CustomHash on dynamic {
+  int get customHash {
+    var total = 0;
+    if (this is Map) {
+      var map = this as Map;
+      for (var key in map.keys) {
+        total ^= CustomHash(key).customHash;
+        total ^= CustomHash(map[key]).customHash;
+      }
+    } else {
+      total = this.hashCode;
+    }
+
+    return total;
+  }
+}

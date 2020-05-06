@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
-import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
 
@@ -35,7 +34,8 @@ class ChangeWatcher {
 
   /// Watches changes to the base [tracking] elements. This only watches for
   /// tree changes, and not playlist changes.
-  void watchChanges(BaseRevision baseRevision, List<LinkedPlaylist> tracking, Function(BaseRevision, LinkedPlaylist, List<String>) callback) {
+  void watchChanges(BaseRevision baseRevision, List<LinkedPlaylist> tracking,
+      Function(BaseRevision, LinkedPlaylist, List<String>) callback) {
     var previousHashes = <LinkedPlaylist, Map<String, int>>{};
 
     for (var exist in tracking) {
@@ -58,32 +58,26 @@ class ChangeWatcher {
         var theseHashes = <String, int>{};
         var trackingIds = exist.root.rootLocal.tracking;
 
-//        if (previousHashes.isNotEmpty &&
-//            previousHashes[exist].length != trackingIds.length) {
-//          print('Tracking lengths to not match up! Pulling from remote...');
-//
-//        } else {
-          for (var track in trackingIds) {
-            var hash = revision.getHash(id: track);
-            theseHashes[track] = hash;
-          }
+        for (var track in trackingIds) {
+          var hash = revision.getHash(id: track);
+          theseHashes[track] = hash;
+        }
 
-            var prevHash = {...previousHashes.putIfAbsent(exist, () => {})};
+        var prevHash = {...previousHashes.putIfAbsent(exist, () => {})};
 
-            var difference = getDifference(prevHash, theseHashes);
-            print(
-                'previous = ${prevHash.keys.toList().map((k) => '$k: ${prevHash[k].toRadixString(16)}').join(', ')}');
-            print(
-                'theseHashes = ${theseHashes.keys.toList().map((k) => '$k: ${theseHashes[k].toRadixString(16)}').join(', ')}');
+        var difference = _getDifference(prevHash, theseHashes).keys;
+        print(
+            'previous = ${prevHash.keys.toList().map((k) => '$k: ${prevHash[k].toRadixString(16)}').join(', ')}');
+        print(
+            'theseHashes = ${theseHashes.keys.toList().map((k) => '$k: ${theseHashes[k].toRadixString(16)}').join(', ')}');
 
-            if (difference.isNotEmpty) {
-              print(
-                  'Difference between hashes! Reloading ${exist.root.root.uri.realName} trackingIds: $difference');
-              callback(revision, exist, difference);
-            } else {
-              print('No hash difference for ${exist.root.root.uri.realName}');
-            }
-//        }
+        if (difference.isNotEmpty) {
+          print(
+              'Difference between hashes! Reloading ${exist.root.root.uri.realName} trackingIds: $difference');
+          callback(revision, exist, difference);
+        } else {
+          print('No hash difference for ${exist.root.root.uri.realName}');
+        }
 
         previousHashes[exist] = theseHashes;
         exist.root.rootLocal.revision = revision.revision;
@@ -91,12 +85,33 @@ class ChangeWatcher {
     });
   }
 
-  List<String> getDifference(Map<String, int> first, Map<String, int> second) {
-    var res = <String>{};
-    void checkMaps(Map<String, int> one, Map<String, int> two) {
+  /// Watches for changes in any playlist tracks or meta. [callback] is invoked
+  /// with a parsed playlist ID every time it is updated.
+  void watchPlaylistChanges(Function(Map<String, String>) callback) {
+    // parsed playlist ID, snapshot
+    final allSnapshots = <String, String>{};
+    Timer.periodic(Duration(seconds: 2), (timer) async {
+      var snapshots = await driverAPI.playlistManager.getPlaylistSnapshots();
+      if (allSnapshots.isEmpty) {
+        allSnapshots.addAll(snapshots);
+        return;
+      }
+
+      var diff = _getDifference(allSnapshots, snapshots);
+      if (diff.isNotEmpty) {
+        callback(diff);
+        allSnapshots.clear();
+        allSnapshots.addAll(snapshots);
+      }
+    });
+  }
+
+  Map<K, V> _getDifference<K, V>(Map<K, V> first, Map<K, V> second) {
+    var res = <K, V>{};
+    void checkMaps(Map<K, V> one, Map<K, V> two) {
       for (var id in one.keys) {
         if (!two.containsKey(id) || two[id] != one[id]) {
-          res.add(id);
+          res[id] = one[id];
         }
       }
     }
@@ -104,6 +119,6 @@ class ChangeWatcher {
     checkMaps(first, second);
     checkMaps(second, first);
 
-    return res.toList();
+    return res;
   }
 }
