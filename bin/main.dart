@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:Spogit/Spogit.dart';
 import 'package:Spogit/utility.dart';
 import 'package:args/args.dart';
@@ -25,7 +27,6 @@ Future<void> main(List<String> args) async {
 
   print('Running as daemon');
 
-  final spogit = await Spogit.createSpogit();
-  spogit.start(path);
-//  spogit.startDaemon(path);
+  final spogit = await Spogit.createSpogit([path, 'cache'].file);
+  await spogit.start(path);
 }

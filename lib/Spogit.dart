@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:Spogit/cache/cache_manager.dart';
+import 'package:Spogit/cache/cache_types.dart';
+import 'package:Spogit/cache/playlist_cover.dart';
 import 'package:Spogit/change_watcher.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
@@ -9,15 +12,21 @@ import 'package:Spogit/local_manager.dart';
 
 class Spogit {
   final DriverAPI driverAPI;
+  final CacheManager cacheManager;
 
   PlaylistManager get playlistManager => driverAPI?.playlistManager;
 
-  Spogit._(this.driverAPI);
+  Spogit._(this.driverAPI, this.cacheManager);
 
-  static Future<Spogit> createSpogit() async {
+  static Future<Spogit> createSpogit(File cacheFile) async {
+    final cacheManager = CacheManager(cacheFile)
+      ..registerType(CacheType.PLAYLIST_COVER, (map) => PlaylistCoverResource.fromPacked(map));
+    await cacheManager.readCache();
+    cacheManager.scheduleWrites();
+
     final driverAPI = DriverAPI();
     await driverAPI.startDriver();
-    return Spogit._(driverAPI);
+    return Spogit._(driverAPI, cacheManager);
   }
 
   Future<void> start(Directory path) async {
@@ -40,7 +49,7 @@ class Spogit {
 
     var currRevision = await playlistManager.analyzeBaseRevision();
 
-    final manager = LocalManager(driverAPI, path);
+    final manager = LocalManager(driverAPI, cacheManager, path);
 
     final existing = manager.getExistingRoots(currRevision);
 
@@ -68,11 +77,14 @@ class Spogit {
           if (searched != null) {
             var playlistDetails = await playlistManager.getPlaylistInfo(id);
 
+            var coverData = await manager.getCoverData(id, playlistDetails['images'][0]['url']);
+
             searched
               ..description = playlistDetails['description']
+              ..imageData = coverData.image
               ..songs = List<SpotifySong>.from(playlistDetails['tracks']
                       ['items']
-                  .map((track) => SpotifySong.create(track['track']['id'])))
+                  .map((track) => SpotifySong.fromJson(track)))
               ..save();
 
             break bruh;

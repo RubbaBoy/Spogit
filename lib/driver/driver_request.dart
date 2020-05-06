@@ -86,8 +86,8 @@ class DriverRequest {
     Map<String, String> headers = const {},
   })  : method = method ?? RequestMethod.Post,
         uri = uri.replace(queryParameters: {
-          ...{'time': '$now'},
           // This is simply to stop Chrome from caching requests
+          ...{'time': '$now'},
           ...uri.queryParameters
         }),
         headers = {

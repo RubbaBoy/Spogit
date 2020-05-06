@@ -238,3 +238,7 @@ extension CustomHash on dynamic {
     return total;
   }
 }
+
+extension IterableUtils<T> on Iterable<T> {
+  Iterable<T> notNull() => where((value) => value != null);
+}

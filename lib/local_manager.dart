@@ -1,16 +1,20 @@
 import 'dart:io';
 
+import 'package:Spogit/cache/cache_manager.dart';
+import 'package:Spogit/cache/playlist_cover.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/utility.dart';
+import 'package:http/http.dart' as http;
 
 class LocalManager {
   final DriverAPI driverAPI;
+  final CacheManager cacheManager;
   final Directory root;
   final List<LinkedPlaylist> linkedPlaylists = [];
 
-  LocalManager(this.driverAPI, this.root);
+  LocalManager(this.driverAPI, this.cacheManager, this.root);
 
   /// Should be invoked once at the beginning for initialization.
   List<LinkedPlaylist> getExistingRoots(BaseRevision baseRevision) {
@@ -18,11 +22,12 @@ class LocalManager {
     for (var dir in root.listSync()) {
       if ([dir, 'local'].file.existsSync()) {
         print('Found a directory with local in it: ${dir.path}');
-        var linked = LinkedPlaylist.preLinked(driverAPI, dir);
+        var linked = LinkedPlaylist.preLinked(this, dir);
 
         var rootLocal = linked.root.rootLocal;
 
-        print('rootLocalRev = ${rootLocal.revision} baseRev = ${baseRevision.revision}');
+        print(
+            'rootLocalRev = ${rootLocal.revision} baseRev = ${baseRevision.revision}');
         // TODO: Check if the contents have changed instead of just revision #
         if (rootLocal.revision != baseRevision.revision) {
           print('Revisions do not match, pulling Spotify changes to local');
@@ -38,9 +43,24 @@ class LocalManager {
 
     return linkedPlaylists;
   }
+
+  Future<PlaylistCoverData> getCoverData(String id, String url) async {
+    return (await cacheManager.getOr<PlaylistCoverResource>(
+        id,
+            () async => await http.get(url).then((response) {
+          var byteData = response.bodyBytes;
+
+          return PlaylistCoverResource(
+              id, PlaylistCoverData(byteData, url));
+        }),
+        forceUpdate: (resource) => resource.data.url != url))
+        .data;
+  }
 }
 
 class LinkedPlaylist {
+  final LocalManager localManager;
+  final CacheManager cacheManager;
   final DriverAPI driverAPI;
   final SpogitRoot root;
 
@@ -50,16 +70,20 @@ class LinkedPlaylist {
   List<RevisionElement> elements;
 
   /// Creates a [LinkedPlaylist] from
-  LinkedPlaylist.preLinked(this.driverAPI, Directory directory)
-      : root = SpogitRoot(directory) {
+  LinkedPlaylist.preLinked(this.localManager, Directory directory)
+      : cacheManager = localManager.cacheManager,
+        driverAPI = localManager.driverAPI,
+        root = SpogitRoot(directory) {
     elements = <RevisionElement>[];
   }
 
   /// Creates a [LinkedPlaylist] from an already populated purley local
   /// directory in ~/Spogit. Upon creation, this will update the Spotify API
   /// if no `local` files are found.
-  LinkedPlaylist.fromLocal(this.driverAPI, Directory directory)
-      : root = SpogitRoot(directory, creating: true) {
+  LinkedPlaylist.fromLocal(this.localManager, Directory directory)
+      : cacheManager = localManager.cacheManager,
+        driverAPI = localManager.driverAPI,
+        root = SpogitRoot(directory, creating: true) {
     print('Updating Spotify API');
 
     elements = <RevisionElement>[];
@@ -68,17 +92,18 @@ class LinkedPlaylist {
   /// Creates a [LinkedPlaylist] from a given [BaseRevision] and list of
   /// top-level Spotify folders/playlists as [elementIds]. This means that it
   /// should not be fed a child playlist or folder.
-  LinkedPlaylist.fromRemote(this.driverAPI, String name,
+  LinkedPlaylist.fromRemote(this.localManager, String name,
       BaseRevision baseRevision, List<String> elementIds)
-      : root = SpogitRoot('~/Spogit/$name'.directory, creating: true, tracking: elementIds) {
+      : cacheManager = localManager.cacheManager,
+        driverAPI = localManager.driverAPI,
+        root = SpogitRoot('~/Spogit/$name'.directory,
+            creating: true, tracking: elementIds) {
     root.rootLocal.revision = baseRevision.revision;
 
     print('Updating local');
 
     updateElements(baseRevision, elementIds);
   }
-
-
 
   void updateElements(BaseRevision baseRevision, List<String> elementIds) {
     elements = <RevisionElement>[];
@@ -154,31 +179,7 @@ class LinkedPlaylist {
     print('Local list comprises of:');
     print(elements.map((el) => el.toString()).join('\n'));
 
-    SpotifyContainer current = root;
-
-    for (var element in elements) {
-      var id = element.id;
-      print('id = $id');
-      switch (element.type) {
-        case ElementType.Playlist:
-          var playlistDetails =
-              await driverAPI.playlistManager.getPlaylistInfo(id);
-
-          current.addPlaylist(element.name)
-            ..spotifyId = id
-            ..name = element.name
-            ..description = playlistDetails['description']
-            ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
-                .map((track) => SpotifySong.create(track['track']['id'])));
-          break;
-        case ElementType.FolderStart:
-          current = (current.addFolder(element.name)..spotifyId = id);
-          break;
-        case ElementType.FolderEnd:
-          current = current.parent;
-          break;
-      }
-    }
+    await parseElementsToContainer(root, elements);
 
     root.save();
 
@@ -197,26 +198,29 @@ class LinkedPlaylist {
 //    ids.parseAll();
     print('mappablesssssssssssssss =');
     print(root.children.map((map) => map.spotifyId).join(', '));
-    var mappables = root.children.where((mappable) => ids.contains(mappable.spotifyId));
-
+    var mappables =
+        root.children.where((mappable) => ids.contains(mappable.spotifyId));
 
     if (mappables.isEmpty) {
       print('Nvm, mappables was empty');
       return;
     }
 
-
     // So currently the local elements (flat) have not been updated and are out of date.
     // baseRevision is updated, with a flat element list, and only "ids" should be updated
     // So we need to take local root and replace the overlapping stuff
-
 
     print('Outdated elements: $elements');
 
     elements.clear();
     elements.addAll(baseRevision.elements);
 
-    var idMap = elements.where((element) => element.type != ElementType.FolderEnd && ids.contains(element.id)).toList().asMap().map((i, element) => MapEntry(element.id, element));
+    var idMap = elements
+        .where((element) =>
+            element.type != ElementType.FolderEnd && ids.contains(element.id))
+        .toList()
+        .asMap()
+        .map((i, element) => MapEntry(element.id, element));
 
     print('about to replace shit, elements are: $elements');
 
@@ -225,36 +229,41 @@ class LinkedPlaylist {
       var element = idMap[id];
       print('elemenbt = $element');
       if (element.type == ElementType.Playlist) {
-          var playlistDetails = await driverAPI.playlistManager.getPlaylistInfo(id);
+        var playlistDetails =
+            await driverAPI.playlistManager.getPlaylistInfo(id);
 
-          var playlist = root.replacePlaylist(id)
-            ..name = element.name
-            ..description = playlistDetails['description']
-            ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
-                .map((track) => SpotifySong.create(track['track']['id'])));
+        var coverData = await localManager.getCoverData(id, playlistDetails['images'][0]['url']);
 
-          await playlist.root.delete(recursive: true);
-        } else if (element.type == ElementType.FolderStart) {
-          var replaced = root.replaceFolder(id);
-          print('sublisting [${element.index}, ${element.index + element.moveCount}]');
-          await parseElementsToContainer(replaced, elements.sublist(element.index, element.index + element.moveCount));
-          await replaced.root.delete(recursive: true);
+        var playlist = root.replacePlaylist(id)
+          ..name = element.name
+          ..description = playlistDetails['description']
+          ..imageData = coverData.image
+          ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
+              .map((track) => SpotifySong.fromJson(track)));
+
+        await playlist.root.delete(recursive: true);
+      } else if (element.type == ElementType.FolderStart) {
+        var replaced = root.replaceFolder(id);
+        print(
+            'sublisting [${element.index}, ${element.index + element.moveCount}]');
+        await parseElementsToContainer(replaced,
+            elements.sublist(element.index, element.index + element.moveCount));
+        await replaced.root.delete(recursive: true);
       }
     }
 
-
-
     print('Local list comprises of:');
     print(elements.map((el) => el.toString()).join('\n'));
-
 
     root.save();
 
     print('root =\n$root');
   }
 
-  Future<void> parseElementsToContainer(SpotifyContainer container, List<RevisionElement> elements) async {
-    SpotifyContainer current = root;
+  Future<void> parseElementsToContainer(
+      SpotifyContainer container, List<RevisionElement> elements) async {
+    // Was just `current = root` before, not sure if changing this will work?
+    var current = container;
     for (var element in elements) {
       var id = element.id;
       switch (element.type) {
@@ -262,12 +271,17 @@ class LinkedPlaylist {
           var playlistDetails =
               await driverAPI.playlistManager.getPlaylistInfo(id);
 
+          // Gets the cover data for the playlist's ID. If it has expired or the
+          // URLs are different, it is fetched again and returns the new result.
+          var coverData = await localManager.getCoverData(id, playlistDetails['images'][0]['url']);
+
           current.addPlaylist(element.name)
             ..spotifyId = id
             ..name = element.name
             ..description = playlistDetails['description']
+            ..imageData = coverData.image
             ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
-                .map((track) => SpotifySong.create(track['track']['id'])));
+                .map((track) => SpotifySong.fromJson(track)));
           break;
         case ElementType.FolderStart:
           current = (current.addFolder(element.name)..spotifyId = id);
@@ -278,6 +292,4 @@ class LinkedPlaylist {
       }
     }
   }
-
-
 }

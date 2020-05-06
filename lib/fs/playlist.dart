@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/local_storage.dart';
 import 'package:Spogit/utility.dart';
+import 'package:crypto/crypto.dart';
 
 class SpogitRoot with SpotifyContainer {
   final RootLocal rootLocal;
@@ -92,8 +94,25 @@ class SpotifyPlaylist extends Mappable {
   final File _songsFile;
   final File _meta;
 
-  int metaHash = 0;
+  Uint8List _imageData;
+
+  set imageData(Uint8List data) {
+    if (coverHash.isEmpty && coverImage.existsSync()) {
+      coverHash = md5.convert(coverImage.readAsBytesSync()).bytes;
+    }
+
+    var hash = md5.convert(data).bytes;
+    if (coverHash != hash) {
+      coverHash = hash;
+
+      print('Setting image to a different thing');
+      _imageData = data;
+    }
+  }
+
+  List<int> coverHash = [];
   int songsHash = 0;
+  int metaHash = 0;
 
   @override
   final SpotifyFolder parent;
@@ -135,7 +154,8 @@ class SpotifyPlaylist extends Mappable {
 
   List<SpotifySong> readSongs() => _songsFile
       .readAsLinesSync()
-      .map((line) => SpotifySong.create(line))
+      .map((line) => SpotifySong.fromLine(line))
+      .notNull()
       .toList();
 
   @override
@@ -153,7 +173,11 @@ class SpotifyPlaylist extends Mappable {
     if (songsHash != 0 && songsHash != currSongsHash) {
       _songsFile
         ..tryCreateSync()
-        ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n'));
+        ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n\n'));
+    }
+
+    if (_imageData?.isNotEmpty ?? false) {
+      coverImage.writeAsBytesSync(_imageData);
     }
 
     metaHash = currMetaHash;
@@ -195,21 +219,53 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
 }
 
 class SpotifySong {
-  String id;
+  static final RegExp linkRegex =
+      RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
 
-//  SpotifySong.create(String line) : id = line.substring(17);
-  SpotifySong.create(String line) : id = line {
-    print('creating with $line');
+  final String id;
+  final String artistLine;
+
+  /// Creates a SpotifySong from individual pieces. The [id] should be a parsed
+  /// track ID.
+  SpotifySong(this.id, String artistName, String songName)
+      : artistLine = '$songName - $artistName' {
+    print('Artistline = $artistLine');
   }
 
-  String toLine() => id;
+  /// Creates a SpotifySong from a single track json element.
+  SpotifySong.fromJson(Map<String, dynamic> json) :
+        id = json['track']['id'],
+        artistLine = '${parseArtists(json['track'])} - ${json['track']['name']}';
 
+  /// The [id] should be the parsed track ID, and the [artistName] is the full
+  /// `Song - Artist` unparsed line from an existing link.
+  SpotifySong._create(this.id, this.artistLine);
+
+  /// Example of a song chunk:
+  /// ```
+  /// [Crazy - Gnarls Barkley](https://open.spotify.com/go?uri=spotify:track:2N5zMZX7YeL1tico8oQxa9)
+  /// ```
+  factory SpotifySong.fromLine(String songChunk) {
+    var matches = linkRegex.allMatches(songChunk);
+    if (matches.isEmpty) {
+      return null;
+    }
+
+    print('Creating from $songChunk');
+
+    var match = matches.first;
+    return SpotifySong._create(match.group(2), match.group(1));
+  }
+
+  String toLine() =>
+      '[$artistLine](https://open.spotify.com/go?uri=spotify:track:$id)';
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-          other is SpotifySong && runtimeType == other.runtimeType &&
-              id == other.id;
+      other is SpotifySong &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -331,3 +387,13 @@ abstract class SpotifyContainer {
 extension IDUtils on List<String> {
   void parseAll() => replaceRange(0, length, map((s) => s.parseId));
 }
+
+String parseArtists(Map<String, dynamic> trackJson) {
+  var artistNames = List<String>.from(trackJson['artists'].map((data) => data['name']));
+  if (artistNames.isEmpty) {
+    return 'Unknown';
+  }
+
+  return artistNames.join(', ');
+}
+
