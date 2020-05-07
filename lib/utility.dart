@@ -116,8 +116,8 @@ extension ASCIIShit on int {
 }
 
 extension PrintStuff<T> on T {
-  T print() {
-    printConsole(this);
+  T print([String leading = '', String trailing = '']) {
+    printConsole('$leading${this}$trailing');
     return this;
   }
 }

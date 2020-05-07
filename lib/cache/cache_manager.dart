@@ -14,7 +14,7 @@ class CacheManager {
   final File cacheFile;
 
   /// The resource type as the key, and the generator from unpacked data.
-  final Map<int, CachedResource Function(Map)> functionGenerator = {};
+  final Map<int, CachedResource Function(int, Map)> functionGenerator = {};
 
   /// The resource ID as the key, and the [CachedResource] as the value.
   final Map<int, CachedResource> cache = {};
@@ -27,8 +27,8 @@ class CacheManager {
 
   CacheManager(this.cacheFile, {this.cacheLife = 3600});
 
-  void registerType(
-          CacheType resourceType, CachedResource Function(Map) cacheGenerator) =>
+  void registerType(CacheType resourceType,
+      CachedResource Function(int, Map) cacheGenerator) =>
       functionGenerator[resourceType.id] = cacheGenerator;
 
   /// Reads caches from the file into memory.
@@ -38,7 +38,7 @@ class CacheManager {
     }
 
     var unpacked = msgpack.deserialize(await cacheFile.readAsBytes()) as Map;
-    for (var id in unpacked.keys) {
+    for (int id in unpacked.keys) {
       /*
       12345678: { // The ID
         'type': 1,
@@ -55,7 +55,7 @@ class CacheManager {
         continue;
       }
 
-      var resource = generator.call(data);
+      var resource = generator.call(id, data);
 
       if (resource == null) {
         log.warning('Null resource created');
@@ -74,12 +74,13 @@ class CacheManager {
 
     print('Writing caches...');
     modified = false;
-    var file = await cacheFile.writeAsBytes(msgpack.serialize(cache.map((id, cache) =>
-        MapEntry(id, {
-          'type': cache.type,
-          'createdAt': cache.createdAt,
-          'data': cache.pack()
-        }))));
+    var file = await cacheFile.writeAsBytes(
+        msgpack.serialize(cache.map((id, cache) =>
+            MapEntry(id, {
+              'type': cache.type.id,
+              'createdAt': cache.createdAt,
+              'data': cache.pack()
+            }.print('Saving entry "$id": ')))));
     print('Cache file is ${file.lengthSync()} bytes');
   }
 
@@ -87,6 +88,14 @@ class CacheManager {
   /// only if the cache has been updated.
   void scheduleWrites([Duration duration = const Duration(seconds: 10)]) =>
       Timer.periodic(duration, (_) async => await writeCache());
+
+  /// Identical to [getOr] but for always-synchronous [resourceGenerator]s.
+  GetOrResult<T> getOrSync<T extends CachedResource>(dynamic id,
+      CachedResource Function() resourceGenerator,
+      {bool Function(CachedResource) forceUpdate}) {
+    var handled = _handleGetOr(id, forceUpdate);
+    return GetOrResult((handled[0] ?? (cache[handled[1]] = resourceGenerator())) as T, handled[2]);
+  }
 
   /// Gets a resource from an [id] which may be anything, as it is transformed
   /// via [customHash]. If it is not found or expired, [resourceGenerator] is
@@ -96,16 +105,24 @@ class CacheManager {
   /// [resourceGenerator] should be invoked regardless of expiration level.
   /// This is used for things like comparing internal data values of the
   /// resource.
-  FutureOr<T> getOr<T extends CachedResource>(
-      dynamic id, FutureOr<CachedResource> Function() resourceGenerator,
+  FutureOr<GetOrResult<T>> getOr<T extends CachedResource>(dynamic id,
+      FutureOr<CachedResource> Function() resourceGenerator,
       {bool Function(CachedResource) forceUpdate}) async {
+    var handled = _handleGetOr(id, forceUpdate);
+    return GetOrResult(handled[0] ?? (cache[handled[1]] = await resourceGenerator()), handled[2]);
+  }
+
+  /// Handles `getOr` methods. Returns the cached variable or null. In the case
+  /// of returning null
+  List _handleGetOr<T extends CachedResource>(dynamic id,
+      bool Function(CachedResource) forceUpdate) {
     id = id is int ? id : CustomHash(id).customHash;
     var cached = cache[id];
     if ((cached?.isExpired() ?? true) || (forceUpdate?.call(cached) ?? false)) {
       modified = true;
-      return cache[id] = await resourceGenerator() as T;
+      return [null, id, true];
     }
-    return cached as T;
+    return [cached, null, false];
   }
 
   /// Gets a resource from an [id] which may be anything, as it is transformed
@@ -122,4 +139,11 @@ class CacheManager {
     cache[id] = resource;
     modified = true;
   }
+}
+
+class GetOrResult<T extends CachedResource> {
+  final T resource;
+  final bool generated;
+
+  GetOrResult(this.resource, this.generated);
 }

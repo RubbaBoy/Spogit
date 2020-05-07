@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:Spogit/cache/cache_manager.dart';
+import 'package:Spogit/cache/cached_resource.dart';
 import 'package:Spogit/cache/playlist_cover.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/utility.dart';
-import 'package:http/http.dart' as http;
 
 class LocalManager {
   final DriverAPI driverAPI;
@@ -44,17 +44,16 @@ class LocalManager {
     return linkedPlaylists;
   }
 
-  Future<PlaylistCoverData> getCoverData(String id, String url) async {
-    return (await cacheManager.getOr<PlaylistCoverResource>(
-        id,
-            () async => await http.get(url).then((response) {
-          var byteData = response.bodyBytes;
-
-          return PlaylistCoverResource(
-              id, PlaylistCoverData(byteData, url));
-        }),
-        forceUpdate: (resource) => resource.data.url != url))
-        .data;
+  /// If the given [url] is different than what is in the cache, the cache will
+  /// be updated and this new [url] will be returned. If the [url] matches the
+  /// cached version, null is returned.
+  String getCoverUrl(String id, String url) {
+    var generated = cacheManager
+      .getOrSync<PlaylistCoverResource>(
+          id, () => PlaylistCoverResource(id, url),
+          forceUpdate: (resource) => resource.data != url ?? true)
+      .generated;
+    return generated ? url : null;
   }
 }
 
@@ -232,12 +231,11 @@ class LinkedPlaylist {
         var playlistDetails =
             await driverAPI.playlistManager.getPlaylistInfo(id);
 
-        var coverData = await localManager.getCoverData(id, playlistDetails['images'][0]['url']);
-
         var playlist = root.replacePlaylist(id)
           ..name = element.name
           ..description = playlistDetails['description']
-          ..imageData = coverData.image
+          ..imageUrl = localManager.getCoverUrl(
+              id, playlistDetails['images'][0]['url'])
           ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
               .map((track) => SpotifySong.fromJson(track)));
 
@@ -271,15 +269,12 @@ class LinkedPlaylist {
           var playlistDetails =
               await driverAPI.playlistManager.getPlaylistInfo(id);
 
-          // Gets the cover data for the playlist's ID. If it has expired or the
-          // URLs are different, it is fetched again and returns the new result.
-          var coverData = await localManager.getCoverData(id, playlistDetails['images'][0]['url']);
-
           current.addPlaylist(element.name)
             ..spotifyId = id
             ..name = element.name
             ..description = playlistDetails['description']
-            ..imageData = coverData.image
+            ..imageUrl = localManager.getCoverUrl(
+                id, playlistDetails['images'][0]['url'])
             ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
                 .map((track) => SpotifySong.fromJson(track)));
           break;

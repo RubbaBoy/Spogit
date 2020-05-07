@@ -3,7 +3,7 @@ import 'package:Spogit/cache/cache_types.dart';
 import 'package:Spogit/utility.dart';
 
 abstract class CachedResource<T> {
-  final String id;
+  final int id;
   final CacheType type;
   final int createdAt;
   final T data;

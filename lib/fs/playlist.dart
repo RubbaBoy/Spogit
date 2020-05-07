@@ -6,6 +6,7 @@ import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/local_storage.dart';
 import 'package:Spogit/utility.dart';
 import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 
 class SpogitRoot with SpotifyContainer {
   final RootLocal rootLocal;
@@ -52,7 +53,7 @@ class SpogitRoot with SpotifyContainer {
 
   void save() {
     rootLocal.saveFile();
-    _children?.forEach((playlist) => playlist.save());
+    _children?.forEach((playlist) async => await playlist.save());
   }
 
   @override
@@ -94,23 +95,16 @@ class SpotifyPlaylist extends Mappable {
   final File _songsFile;
   final File _meta;
 
-  Uint8List _imageData;
+  String _imageUrl;
 
-  set imageData(Uint8List data) {
-    if (coverHash.isEmpty && coverImage.existsSync()) {
-      coverHash = md5.convert(coverImage.readAsBytesSync()).bytes;
-    }
-
-    var hash = md5.convert(data).bytes;
-    if (coverHash != hash) {
-      coverHash = hash;
-
-      print('Setting image to a different thing');
-      _imageData = data;
+  set imageUrl(String url) {
+    if (url != null && url != _imageUrl) {
+      _imageUrl = url;
+      imageChanged = true;
     }
   }
 
-  List<int> coverHash = [];
+  bool imageChanged = false;
   int songsHash = 0;
   int metaHash = 0;
 
@@ -159,8 +153,8 @@ class SpotifyPlaylist extends Mappable {
       .toList();
 
   @override
-  void save() {
-    super.save();
+  Future<void> save() async {
+    await super.save();
 
     var currMetaHash = _metaJson?.customHash;
     if (metaHash != 0 && metaHash != currMetaHash) {
@@ -176,8 +170,9 @@ class SpotifyPlaylist extends Mappable {
         ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n\n'));
     }
 
-    if (_imageData?.isNotEmpty ?? false) {
-      coverImage.writeAsBytesSync(_imageData);
+    if (imageChanged) {
+      imageChanged = false;
+      coverImage.writeAsBytesSync(await http.get(_imageUrl).then((res) => res.bodyBytes));
     }
 
     metaHash = currMetaHash;
@@ -206,10 +201,10 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
         super([parentDirectory, name].directory);
 
   @override
-  void save() {
-    super.save();
+  Future<void> save() async {
+    await super.save();
 
-    children?.forEach((mappable) => mappable.save());
+    children?.forEach((mappable) async => await mappable.save());
   }
 
   @override
@@ -292,7 +287,7 @@ abstract class Mappable extends LocalStorage {
 
   set spotifyId(String id) => this['id'] = id;
 
-  void save() => saveFile();
+  Future<void> save() async => saveFile();
 }
 
 extension MappableChecker on Directory {

@@ -20,7 +20,7 @@ class Spogit {
 
   static Future<Spogit> createSpogit(File cacheFile) async {
     final cacheManager = CacheManager(cacheFile)
-      ..registerType(CacheType.PLAYLIST_COVER, (map) => PlaylistCoverResource.fromPacked(map));
+      ..registerType(CacheType.PLAYLIST_COVER, (id, map) => PlaylistCoverResource.fromPacked(id, map));
     await cacheManager.readCache();
     cacheManager.scheduleWrites();
 
@@ -77,15 +77,13 @@ class Spogit {
           if (searched != null) {
             var playlistDetails = await playlistManager.getPlaylistInfo(id);
 
-            var coverData = await manager.getCoverData(id, playlistDetails['images'][0]['url']);
-
             searched
               ..description = playlistDetails['description']
-              ..imageData = coverData.image
+              ..imageUrl = manager.getCoverUrl(id, playlistDetails['images'][0]['url'])
               ..songs = List<SpotifySong>.from(playlistDetails['tracks']
                       ['items']
-                  .map((track) => SpotifySong.fromJson(track)))
-              ..save();
+                  .map((track) => SpotifySong.fromJson(track)));
+            await searched.save();
 
             break bruh;
           }

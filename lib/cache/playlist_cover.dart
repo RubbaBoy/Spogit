@@ -1,23 +1,17 @@
-import 'dart:typed_data';
-
 import 'package:Spogit/cache/cache_types.dart';
 import 'package:Spogit/cache/cached_resource.dart';
 import 'package:Spogit/utility.dart';
 
-class PlaylistCoverResource extends CachedResource<PlaylistCoverData> {
-  PlaylistCoverResource(String id, PlaylistCoverData data)
-      : super(id, CacheType.PLAYLIST_COVER, now, data);
+class PlaylistCoverResource extends CachedResource<String> {
+  PlaylistCoverResource(String id, String url)
+      : super(id.customHash, CacheType.PLAYLIST_COVER, now, url);
 
-  PlaylistCoverResource.fromPacked(Map map)
-    : super(map['id'], CacheType.PLAYLIST_COVER, now, PlaylistCoverData(map['image'], map['url']));
+  PlaylistCoverResource.fromPacked(int id, Map map)
+      : super(id, CacheType.PLAYLIST_COVER, now, map['data']['url']);
 
   @override
-  Map pack() => {'image': data.image.buffer.asByteData(), 'url': data.url};
-}
+  Map pack() => {'url': data};
 
-class PlaylistCoverData {
-  final Uint8List image;
-  final String url;
-
-  PlaylistCoverData(this.image, this.url);
+  @override
+  String toString() => 'PlaylistCoverResource{id = $id, url = $data}';
 }
