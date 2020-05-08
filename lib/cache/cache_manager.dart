@@ -84,6 +84,13 @@ class CacheManager {
     print('Cache file is ${file.lengthSync()} bytes');
   }
 
+  /// Removes all cache elements with an ID in the given [keys] list.
+  void clearCacheFor(List<dynamic> keys) {
+    for (var key in keys) {
+      cache.remove(customHash(key));
+    }
+  }
+
   /// Schedules writes for the given [Duration], or by default every 10 seconds
   /// only if the cache has been updated.
   void scheduleWrites([Duration duration = const Duration(seconds: 10)]) =>

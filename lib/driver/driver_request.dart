@@ -76,7 +76,7 @@ class DriverRequest {
   final RequestMethod method;
   final Uri uri;
   final Map<String, String> headers;
-  final Map<String, dynamic> body;
+  final dynamic body;
 
   DriverRequest({
     String token,
@@ -118,6 +118,9 @@ class RequestMethod {
 
   static final RequestMethod Delete = RequestMethod._(
       (url, headers, body) => http.delete(url, headers: headers));
+
+  static final RequestMethod Put = RequestMethod._(
+      (url, headers, body) => http.put(url, headers: headers));
 
   final Future<http.Response> Function(
       String url, Map<String, String> headers, dynamic body) request;

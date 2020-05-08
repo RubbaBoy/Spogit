@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:Spogit/cache/cache_manager.dart';
@@ -8,15 +9,20 @@ import 'package:Spogit/change_watcher.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/playlist.dart';
+import 'package:Spogit/git_hook.dart';
+import 'package:Spogit/input_controller.dart';
 import 'package:Spogit/local_manager.dart';
+import 'package:Spogit/utility.dart';
 
 class Spogit {
+  final GitHook gitHook;
+  final ChangeWatcher changeWatcher;
   final DriverAPI driverAPI;
   final CacheManager cacheManager;
 
   PlaylistManager get playlistManager => driverAPI?.playlistManager;
 
-  Spogit._(this.driverAPI, this.cacheManager);
+  Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager);
 
   static Future<Spogit> createSpogit(File cacheFile) async {
     final cacheManager = CacheManager(cacheFile)
@@ -26,30 +32,37 @@ class Spogit {
 
     final driverAPI = DriverAPI();
     await driverAPI.startDriver();
-    return Spogit._(driverAPI, cacheManager);
+
+    final changeWatcher = ChangeWatcher(driverAPI);
+    final gitHook = GitHook();
+    return Spogit._(gitHook, changeWatcher, driverAPI, cacheManager);
   }
 
   Future<void> start(Directory path) async {
-    final changeWatcher = ChangeWatcher(driverAPI);
+    final manager = LocalManager(driverAPI, cacheManager, path);
+    final inputController = InputController(driverAPI, manager);
 
-    var name = 'Test Local';
+    await gitHook.listen();
+    gitHook.postCheckout.stream.listen((data) async {
+      var wd = data.workingDirectory;
 
-    var elements = [
-      'spotify:playlist:77TYGLTCm45nA9SOT2kAaj',
-      'spotify:start-group:27345c6f477d000:first'
-    ];
-
-//    // first,   tld playlist
-//    var linkedStuff = LinkedPlaylist.fromRemote(driverAPI, 'Test Local', await playlistManager.analyzeBaseRevision(), elements);
-//    await linkedStuff.initElement();
-//
-//    exit(0);
-
-//    path.listSync().forEach((child) => child.deleteSync(recursive: true));
+      if (directoryEquals(wd.parent, path)) {
+        var foundLocal = manager.getPlaylist(wd);
+        if (foundLocal == null) {
+          print('Creating playlist at ${wd.path}');
+          var linked = LinkedPlaylist.fromLocal(manager, normalizeDir(wd).directory);
+          manager.addPlaylist(linked);
+          await linked.initLocal();
+        } else {
+          print('Playlist already exists locally! No need to create it, updating from local...');
+          await foundLocal.initLocal();
+        }
+      } else {
+        print('Not a direct child in ${path.path}');
+      }
+    });
 
     var currRevision = await playlistManager.analyzeBaseRevision();
-
-    final manager = LocalManager(driverAPI, cacheManager, path);
 
     final existing = manager.getExistingRoots(currRevision);
 
@@ -79,7 +92,7 @@ class Spogit {
 
             searched
               ..description = playlistDetails['description']
-              ..imageUrl = manager.getCoverUrl(id, playlistDetails['images'][0]['url'])
+              ..imageUrl = manager.getCoverUrl(id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
               ..songs = List<SpotifySong>.from(playlistDetails['tracks']
                       ['items']
                   .map((track) => SpotifySong.fromJson(track)));
@@ -92,6 +105,8 @@ class Spogit {
 
       print('Updated change stuff');
     });
+
+    inputController.start();
   }
 
 //  void startDaemon(Directory path) {
@@ -118,12 +133,11 @@ class Spogit {
 //    });
 //  }
 
-  /// Creates a fresh playlist, adding it to Spotify
-  Future<void> createFresh(String name) async {
-    await playlistManager.createPlaylist(name);
-  }
+  bool directoryEquals(Directory one, Directory two) =>
+      listEquals(normalizeDir(one), normalizeDir(two));
 
-  /// Creates a Spogit playlist from an existing Spotify playlist. [playlistId]
-  /// is the raw playlist ID.
-  Future<void> createLinked(String playlistId) async {}
+  List<String> normalizeDir(Directory directory) {
+    var segments = directory.uri.pathSegments;
+    return [...segments]..replaceRange(0, 1, ['${segments.first.substring(0, 1).toLowerCase()}:']);
+  }
 }

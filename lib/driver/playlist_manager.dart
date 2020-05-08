@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
@@ -39,7 +40,7 @@ class PlaylistManager {
     ).send();
 
     var res = <String, String>{};
-    for (var item in response.json['items']) {
+    for (var item in response.json['items'] ?? const []) {
       res[item['id']] = item['snapshot_id'];
     }
 
@@ -246,7 +247,8 @@ class PlaylistManager {
     ).send().then((res) => res.json);
   }
 
-  Future<Map<String, dynamic>> createPlaylist(String name) async {
+  Future<Map<String, dynamic>> createPlaylist(String name, [String description = '']) async {
+    sleep(Duration(milliseconds: 100)); // TODO: Proper rate limiting system!!!
     return basedRequest(
             (_) =>
             DriverRequest(
@@ -254,8 +256,22 @@ class PlaylistManager {
               token: _requestManager.authToken,
               body: {
                 'name': name,
-//                'public': true,
+                'description': description,
               },
+            ).send(),
+        false);
+  }
+
+  /// Uploads the given [file] as the playlist cover to the given [playlist] ID.
+  Future<Map<String, dynamic>> uploadCover(File file, String playlist) async {
+    sleep(Duration(milliseconds: 100)); // TODO: Proper rate limiting system!!!
+    return basedRequest(
+            (_) async =>
+            DriverRequest(
+              uri: Uri.parse('$apiUrl/playlists/${playlist.parseId}/images'),
+              method: RequestMethod.Put,
+              token: _requestManager.authToken,
+              body: await file.readAsBytes()
             ).send(),
         false);
   }

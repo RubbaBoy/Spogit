@@ -39,8 +39,7 @@ class SpogitRoot with SpotifyContainer {
 
   bool get isValid => meta.existsSync();
 
-  List<Mappable> _traverseDir(Directory dir, SpotifyFolder parent) =>
-      dir.listSync().whereType<Directory>().map((dir) {
+  List<Mappable> _traverseDir(Directory dir, SpotifyFolder parent) => dir.listSync().whereType<Directory>().where((dir) => !dir.uri.realName.startsWith('.')).map((dir) {
         var name = dir.uri.realName;
         if (dir.isPlaylist) {
           return SpotifyPlaylist(name, dir.parent, parent);
@@ -98,7 +97,9 @@ class SpotifyPlaylist extends Mappable {
   String _imageUrl;
 
   set imageUrl(String url) {
+    print('url = $url');
     if (url != null && url != _imageUrl) {
+      print('CHANBGING!!!!');
       _imageUrl = url;
       imageChanged = true;
     }
@@ -157,14 +158,16 @@ class SpotifyPlaylist extends Mappable {
     await super.save();
 
     var currMetaHash = _metaJson?.customHash;
-    if (metaHash != 0 && metaHash != currMetaHash) {
+    if (metaHash == 0 || metaHash != currMetaHash) {
+      metaHash = currMetaHash;
       _meta
         ..tryCreateSync()
         ..writeAsStringSync(jsonEncode(meta));
     }
 
     var currSongsHash = _songs?.customHash;
-    if (songsHash != 0 && songsHash != currSongsHash) {
+    if (songsHash == 0 || songsHash != currSongsHash) {
+      songsHash = currSongsHash;
       _songsFile
         ..tryCreateSync()
         ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n\n'));
@@ -174,9 +177,6 @@ class SpotifyPlaylist extends Mappable {
       imageChanged = false;
       coverImage.writeAsBytesSync(await http.get(_imageUrl).then((res) => res.bodyBytes));
     }
-
-    metaHash = currMetaHash;
-    songsHash = currSongsHash;
   }
 
   @override

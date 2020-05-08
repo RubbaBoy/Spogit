@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:Spogit/cache/cache_manager.dart';
-import 'package:Spogit/cache/cached_resource.dart';
 import 'package:Spogit/cache/playlist_cover.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
@@ -44,15 +44,22 @@ class LocalManager {
     return linkedPlaylists;
   }
 
+  void addPlaylist(LinkedPlaylist linkedPlaylist) => linkedPlaylists.add(linkedPlaylist);
+
+  LinkedPlaylist getPlaylist(Directory directory) =>
+      linkedPlaylists.firstWhere((playlist) => playlist.root.root == directory,
+          orElse: () => null);
+
   /// If the given [url] is different than what is in the cache, the cache will
   /// be updated and this new [url] will be returned. If the [url] matches the
   /// cached version, null is returned.
   String getCoverUrl(String id, String url) {
+    url ??= 'https://rubbaboy.me/images/etzacxs';
     var generated = cacheManager
-      .getOrSync<PlaylistCoverResource>(
-          id, () => PlaylistCoverResource(id, url),
-          forceUpdate: (resource) => resource.data != url ?? true)
-      .generated;
+        .getOrSync<PlaylistCoverResource>(
+            id, () => PlaylistCoverResource(id, url),
+            forceUpdate: (resource) => resource.data != url ?? true)
+        .generated;
     return generated ? url : null;
   }
 }
@@ -85,6 +92,8 @@ class LinkedPlaylist {
         root = SpogitRoot(directory, creating: true) {
     print('Updating Spotify API');
 
+    print('List in ${directory.path}: ${directory.listSync(recursive: true).join(', ')}');
+
     elements = <RevisionElement>[];
   }
 
@@ -102,6 +111,8 @@ class LinkedPlaylist {
     print('Updating local');
 
     updateElements(baseRevision, elementIds);
+
+    cacheManager.clearCacheFor(elements.map((element) => element.id).toList());
   }
 
   void updateElements(BaseRevision baseRevision, List<String> elementIds) {
@@ -132,7 +143,7 @@ class LinkedPlaylist {
       if (mappable is SpotifyPlaylist) {
         print('Creating playlist "${mappable.name}" in #$to');
 
-        var id = (await playlists.createPlaylist(mappable.name))['id'];
+        var id = (await playlists.createPlaylist(mappable.name, mappable.description))['id'];
 
         await playlists.movePlaylist(id, toGroup: to);
 
@@ -234,8 +245,8 @@ class LinkedPlaylist {
         var playlist = root.replacePlaylist(id)
           ..name = element.name
           ..description = playlistDetails['description']
-          ..imageUrl = localManager.getCoverUrl(
-              id, playlistDetails['images'][0]['url'])
+          ..imageUrl =
+              localManager.getCoverUrl(id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
           ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
               .map((track) => SpotifySong.fromJson(track)));
 
@@ -274,7 +285,7 @@ class LinkedPlaylist {
             ..name = element.name
             ..description = playlistDetails['description']
             ..imageUrl = localManager.getCoverUrl(
-                id, playlistDetails['images'][0]['url'])
+                id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
             ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
                 .map((track) => SpotifySong.fromJson(track)));
           break;

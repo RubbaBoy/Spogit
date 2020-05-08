@@ -72,6 +72,8 @@ Map<String, dynamic> tryJsonDecode(String json,
 // Extensions
 
 extension StringUtils on String {
+  static final QUOTES_REGEX = RegExp('[^\\s"\']+|"([^"]*)"|\'([^\']*)\'');
+
   int parseInt() => int.parse(this);
 
   double parseDouble() => double.parse(this);
@@ -85,6 +87,19 @@ extension StringUtils on String {
   Directory get directory => Directory(separatorFix);
 
   Uri get uri => Uri.tryParse(this);
+
+  List<String> splitMulti(List<String> strings) {
+    var list = [this];
+    for (var value in strings) {
+      list = list.expand((inner) => inner.split(value)).toList();
+    }
+    return list;
+  }
+
+  List<String> splitQuotes() => QUOTES_REGEX
+      .allMatches(this)
+      .map((match) => match.group(1) ?? match.group(0))
+      .toList();
 }
 
 extension NumUtil on int {
@@ -221,6 +236,8 @@ extension FileUtils on File {
     });
   }
 }
+
+int customHash(dynamic dyn) => CustomHash(dyn).customHash;
 
 extension CustomHash on dynamic {
   int get customHash {
