@@ -352,7 +352,7 @@ class PlaylistManager {
   Future<TrackFull> getTrack(String id) => basedRequest(
       (_) => DriverRequest(
         method: RequestMethod.Get,
-            uri: Uri.parse('$apiBase/tracks/${id.parseId}'.print()),
+            uri: Uri.parse('$apiBase/tracks/${id.parseId}'),
             token: _requestManager.authToken,
           ).send(),
       false).then(TrackFull.jsonConverter);

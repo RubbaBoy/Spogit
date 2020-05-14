@@ -35,6 +35,7 @@ class SpogitRoot extends SpotifyContainer {
       : rootLocal = RootLocal([root, 'local'].file),
         meta = [root, 'meta.json'].file..tryCreateSync(),
         coverImage = [root, 'cover.jpg'].file {
+    print('MAKING ROOT!!!!! root dir is: ${root.path}');
     children;
     if (creating) {
       rootLocal
@@ -156,6 +157,7 @@ class SpotifyPlaylist extends Mappable {
           ..createSync(recursive: true),
         super([parentDirectory, name].directory) {
     meta;
+    print('Playlist in ${parentDirectory.path}/$name');
   }
 
   List<SpotifySong> readSongs() => _songsFile
@@ -223,7 +225,9 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
   Future<void> save() async {
     await super.save();
 
-    children?.forEach((mappable) async => await mappable.save());
+    for (var child in children) {
+      await child.save();
+    }
   }
 
   @override
@@ -269,7 +273,7 @@ class SpotifySong {
 
   /// Creates a SpotifySong from a single track json element.
   SpotifySong.fromJson(this.spogit, PlaylistTrack playlistTrack)
-      : id = playlistTrack.print().track.id,
+      : id = playlistTrack.track.id,
         _album = playlistTrack.track.album {
     albumId = _album.id;
   }

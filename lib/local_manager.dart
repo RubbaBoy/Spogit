@@ -237,8 +237,8 @@ class LinkedPlaylist {
 
   /// Initializes the [root] with the set [elements] via [updateElements].
   Future<void> initElement() async {
-    print('Local list comprises of:');
-    print(elements.map((el) => el.toString()).join('\n'));
+//    print('Local list comprises of:');
+//    print(elements.map((el) => el.toString()).join('\n'));
 
     await parseElementsToContainer(root, elements);
 
@@ -301,19 +301,22 @@ class LinkedPlaylist {
           ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
               .map((track) => SpotifySong.fromJson(spogit, track)));
 
-        await playlist.root.delete(recursive: true);
+        // TODO: Inspect the effects on removing this delete. It didn't work as
+        //  before nothing was notified files were being deleted, so they were
+        //  never created unless they were modified from their previous value
+//        await playlist.root.delete(recursive: true);
       } else if (element.type == ElementType.FolderStart) {
         var replaced = root.replaceFolder(id);
         print(
             'sublisting [${element.index}, ${element.index + element.moveCount}]');
         await parseElementsToContainer(replaced,
             elements.sublist(element.index, element.index + element.moveCount));
-        await replaced.root.delete(recursive: true);
+//        await replaced.root.delete(recursive: true);
       }
     }
 
-    print('Local list comprises of:');
-    print(elements.map((el) => el.toString()).join('\n'));
+//    print('Local list comprises of:');
+//    print(elements.map((el) => el.toString()).join('\n'));
 
     await root.save();
 
