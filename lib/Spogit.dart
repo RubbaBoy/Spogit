@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:Spogit/cache/album/album_resource_manager.dart';
@@ -27,11 +26,13 @@ class Spogit {
 
   PlaylistManager get playlistManager => driverAPI?.playlistManager;
 
-  Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager, this.idResourceManager, this.albumResourceManager);
+  Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager,
+      this.idResourceManager, this.albumResourceManager);
 
   static Future<Spogit> createSpogit(File cacheFile) async {
     final cacheManager = CacheManager(cacheFile)
-      ..registerType(CacheType.PLAYLIST_COVER, (id, map) => PlaylistCoverResource.fromPacked(id, map))
+      ..registerType(CacheType.PLAYLIST_COVER,
+          (id, map) => PlaylistCoverResource.fromPacked(id, map))
       ..registerType(CacheType.ID, (id, map) => IdResource.fromPacked(id, map));
     await cacheManager.readCache();
     cacheManager.scheduleWrites();
@@ -42,15 +43,18 @@ class Spogit {
     final changeWatcher = ChangeWatcher(driverAPI);
     final gitHook = GitHook();
 
-    final idResourceManager = IdResourceManager(driverAPI.playlistManager, cacheManager);
-    final albumResourceManager = AlbumResourceManager(driverAPI.playlistManager, cacheManager);
+    final idResourceManager =
+        IdResourceManager(driverAPI.playlistManager, cacheManager);
+    final albumResourceManager =
+        AlbumResourceManager(driverAPI.playlistManager, cacheManager);
 
-    return Spogit._(gitHook, changeWatcher, driverAPI, cacheManager, idResourceManager, albumResourceManager);
+    return Spogit._(gitHook, changeWatcher, driverAPI, cacheManager,
+        idResourceManager, albumResourceManager);
   }
 
   Future<void> start(Directory path) async {
     final manager = LocalManager(this, driverAPI, cacheManager, path);
-    final inputController = InputController(driverAPI, manager);
+    final inputController = InputController(this, manager);
 
     await gitHook.listen();
     gitHook.postCheckout.stream.listen((data) async {
@@ -63,7 +67,8 @@ class Spogit {
 
           changeWatcher.lock();
 
-          var linked = LinkedPlaylist.fromLocal(manager, normalizeDir(wd).directory);
+          var linked =
+              LinkedPlaylist.fromLocal(this, manager, normalizeDir(wd).directory);
           manager.addPlaylist(linked);
           var tracking = await linked.initLocal();
           print('tracking: $tracking');
@@ -74,7 +79,8 @@ class Spogit {
             print('Complete with everything!!!!');
           });
         } else {
-          print('Playlist already exists locally! No need to create it, updating from local...');
+          print(
+              'Playlist already exists locally! No need to create it, updating from local...');
           await foundLocal.initLocal();
         }
       } else {
@@ -112,10 +118,10 @@ class Spogit {
             var playlistDetails = await playlistManager.getPlaylistInfo(id);
 
             searched
-              ..description = playlistDetails['description']
-              ..imageUrl = manager.getCoverUrl(id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
-              ..songs = List<SpotifySong>.from(playlistDetails['tracks']
-                      ['items']
+              ..description = playlistDetails.description
+              ..imageUrl = manager.getCoverUrl(
+                  id, playlistDetails.images?.safeFirst?.url)
+              ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
                   .map((track) => SpotifySong.fromJson(this, track)));
             await searched.save();
 
@@ -135,6 +141,8 @@ class Spogit {
 
   List<String> normalizeDir(Directory directory) {
     var segments = directory.uri.pathSegments;
-    return [...segments]..replaceRange(0, 1, ['${segments.first.substring(0, 1).toLowerCase()}:']);
+    return [
+      ...segments
+    ]..replaceRange(0, 1, ['${segments.first.substring(0, 1).toLowerCase()}:']);
   }
 }

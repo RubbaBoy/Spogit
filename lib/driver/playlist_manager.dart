@@ -6,6 +6,7 @@ import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/json/album_full.dart';
 import 'package:Spogit/json/paging.dart';
+import 'package:Spogit/json/playlist_full.dart';
 import 'package:Spogit/json/track_full.dart';
 import 'package:Spogit/json/track_simplified.dart';
 import 'package:Spogit/utility.dart';
@@ -267,7 +268,7 @@ class PlaylistManager {
 
   /// Gets a playlist by its [id].
   /// <br><br>See [Get a Playlist](https://developer.spotify.com/documentation/web-api/reference/playlists/get-playlist/)
-  Future<Map<String, dynamic>> getPlaylistInfo(String id) {
+  Future<PlaylistFull> getPlaylistInfo(String id) {
     return DriverRequest(
       method: RequestMethod.Get,
       uri: Uri.parse('$apiBase/playlists/${id.parseId}')
@@ -276,7 +277,7 @@ class PlaylistManager {
         'market': 'from_token',
       }),
       token: _requestManager.authToken,
-    ).send().then((res) => res.json);
+    ).send().then((res) => PlaylistFull.fromJson(res.json));
   }
 
   /// Removes tracks from the given [playlist] ID. [trackIds] should contain a
@@ -286,10 +287,10 @@ class PlaylistManager {
     trackIds = trackIds.map((str) => str.parseId).toList();
 
     return getPlaylistInfo(playlist).then((info) {
-      var items = info['tracks']['items'] as List<Map<String, dynamic>>;
+      var items = info.tracks.items;
 
       var ids = items
-          .map((track) => track['track']['id'])
+          .map((track) => track.track.id)
           .map((id) => id.parseId)
           .toList()
           .asMap()
@@ -350,7 +351,8 @@ class PlaylistManager {
   /// <br><br>See [Get a Track](https://developer.spotify.com/documentation/web-api/reference/tracks/get-track/)
   Future<TrackFull> getTrack(String id) => basedRequest(
       (_) => DriverRequest(
-            uri: Uri.parse('$apiUrl/tracks/${id.parseId}'),
+        method: RequestMethod.Get,
+            uri: Uri.parse('$apiBase/tracks/${id.parseId}'.print()),
             token: _requestManager.authToken,
           ).send(),
       false).then(TrackFull.jsonConverter);
@@ -359,7 +361,8 @@ class PlaylistManager {
   /// <br><br>See [Get Several Tracks](https://developer.spotify.com/documentation/web-api/reference/tracks/get-several-tracks/)
   Future<List<TrackFull>> getTracks(List<String> ids) => basedRequest(
       (_) => DriverRequest(
-              uri: Uri.parse('$apiUrl/tracks'),
+          method: RequestMethod.Get,
+              uri: Uri.parse('$apiBase/tracks'),
               token: _requestManager.authToken,
               body: {
                 'ids': ids.map((id) => id.parseId).join(','),

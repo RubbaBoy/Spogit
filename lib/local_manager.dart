@@ -29,7 +29,7 @@ class LocalManager {
 
         if ([dir, 'local'].file.existsSync()) {
           print('Directory has already been locally synced');
-          var linked = LinkedPlaylist.preLinked(this, dir);
+          var linked = LinkedPlaylist.preLinked(spogit, this, dir);
 
           print('Waiting 15 seconds...');
           sleep(Duration(seconds: 10));
@@ -55,7 +55,7 @@ class LocalManager {
           linkedPlaylists.add(linked);
         } else {
           print('Directory has not been locally synced, creating and pushing to remote now');
-          var local = LinkedPlaylist.fromLocal(this, dir);
+          var local = LinkedPlaylist.fromLocal(spogit, this, dir);
           await local.initLocal(true);
           linkedPlaylists.add(local);
         }
@@ -101,22 +101,20 @@ class LinkedPlaylist {
   List<RevisionElement> elements;
 
   /// Creates a [LinkedPlaylist] from
-  LinkedPlaylist.preLinked(this.localManager, Directory directory)
-      : spogit = localManager.spogit,
-        cacheManager = localManager.cacheManager,
-        driverAPI = localManager.driverAPI,
-        root = SpogitRoot(directory) {
+  LinkedPlaylist.preLinked(this.spogit, this.localManager, Directory directory)
+      : cacheManager = spogit.cacheManager,
+        driverAPI = spogit.driverAPI,
+        root = SpogitRoot(spogit, directory) {
     elements = <RevisionElement>[];
   }
 
   /// Creates a [LinkedPlaylist] from an already populated purley local
   /// directory in ~/Spogit. Upon creation, this will update the Spotify API
   /// if no `local` files are found.
-  LinkedPlaylist.fromLocal(this.localManager, Directory directory)
-      : spogit = localManager.spogit,
-        cacheManager = localManager.cacheManager,
-        driverAPI = localManager.driverAPI,
-        root = SpogitRoot(directory, creating: true) {
+  LinkedPlaylist.fromLocal(this.spogit, this.localManager, Directory directory)
+      :cacheManager = spogit.cacheManager,
+        driverAPI = spogit.driverAPI,
+        root = SpogitRoot(spogit, directory, creating: true) {
     print('Updating Spotify API');
 
     print('List in ${directory.path}: ${directory.listSync(recursive: true).join(', ')}');
@@ -127,12 +125,11 @@ class LinkedPlaylist {
   /// Creates a [LinkedPlaylist] from a given [BaseRevision] and list of
   /// top-level Spotify folders/playlists as [elementIds]. This means that it
   /// should not be fed a child playlist or folder.
-  LinkedPlaylist.fromRemote(this.localManager, String name,
+  LinkedPlaylist.fromRemote(this.spogit, this.localManager, String name,
       BaseRevision baseRevision, List<String> elementIds)
-      : spogit = localManager.spogit,
-        cacheManager = localManager.cacheManager,
-        driverAPI = localManager.driverAPI,
-        root = SpogitRoot('~/Spogit/$name'.directory,
+      : cacheManager = spogit.cacheManager,
+        driverAPI = spogit.driverAPI,
+        root = SpogitRoot(spogit, '~/Spogit/$name'.directory,
             creating: true, tracking: elementIds) {
     root.rootLocal.revision = baseRevision.revision;
 
@@ -298,10 +295,10 @@ class LinkedPlaylist {
 
         var playlist = root.replacePlaylist(id)
           ..name = element.name
-          ..description = playlistDetails['description']
+          ..description = playlistDetails.description
           ..imageUrl =
-              localManager.getCoverUrl(id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
-          ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
+              localManager.getCoverUrl(id, playlistDetails.images?.safeFirst?.url)
+          ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
               .map((track) => SpotifySong.fromJson(spogit, track)));
 
         await playlist.root.delete(recursive: true);
@@ -337,10 +334,10 @@ class LinkedPlaylist {
           current.addPlaylist(element.name)
             ..spotifyId = id
             ..name = element.name
-            ..description = playlistDetails['description']
+            ..description = playlistDetails.description
             ..imageUrl = localManager.getCoverUrl(
-                id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
-            ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
+                id, playlistDetails.images?.safeFirst?.url)
+            ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
                 .map((track) => SpotifySong.fromJson(spogit, track)));
           break;
         case ElementType.FolderStart:

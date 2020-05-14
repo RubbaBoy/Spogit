@@ -1,8 +1,9 @@
 import 'package:Spogit/json/artist.dart';
 import 'package:Spogit/json/image.dart';
+import 'package:Spogit/json/json.dart';
 import 'package:Spogit/json/sub/external_url.dart';
 
-class AlbumSimplified {
+class AlbumSimplified with Jsonable {
   String albumType;
   List<Artists> artists;
   List<String> availableMarkets;
@@ -18,36 +19,36 @@ class AlbumSimplified {
 
   AlbumSimplified(
       {this.albumType,
-        this.artists,
-        this.availableMarkets,
-        this.externalUrls,
-        this.href,
-        this.id,
-        this.images,
-        this.name,
-        this.releaseDate,
-        this.releaseDatePrecision,
-        this.type,
-        this.uri});
+      this.artists,
+      this.availableMarkets,
+      this.externalUrls,
+      this.href,
+      this.id,
+      this.images,
+      this.name,
+      this.releaseDate,
+      this.releaseDatePrecision,
+      this.type,
+      this.uri});
 
   AlbumSimplified.fromJson(Map<String, dynamic> json) {
     albumType = json['album_type'];
     if (json['artists'] != null) {
-      artists = new List<Artists>();
+      artists = <Artists>[];
       json['artists'].forEach((v) {
-        artists.add(new Artists.fromJson(v));
+        artists.add(Artists.fromJson(v));
       });
     }
-    availableMarkets = json['available_markets'].cast<String>();
+    availableMarkets = json['available_markets']?.cast<String>();
     externalUrls = json['external_urls'] != null
-        ? new ExternalUrls.fromJson(json['external_urls'])
+        ? ExternalUrls.fromJson(json['external_urls'])
         : null;
     href = json['href'];
     id = json['id'];
     if (json['images'] != null) {
-      images = new List<Images>();
+      images = <Images>[];
       json['images'].forEach((v) {
-        images.add(new Images.fromJson(v));
+        images.add(Images.fromJson(v));
       });
     }
     name = json['name'];
@@ -57,26 +58,25 @@ class AlbumSimplified {
     uri = json['uri'];
   }
 
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['album_type'] = this.albumType;
-    if (this.artists != null) {
-      data['artists'] = this.artists.map((v) => v.toJson()).toList();
-    }
-    data['available_markets'] = this.availableMarkets;
-    if (this.externalUrls != null) {
-      data['external_urls'] = this.externalUrls.toJson();
-    }
-    data['href'] = this.href;
-    data['id'] = this.id;
-    if (this.images != null) {
-      data['images'] = this.images.map((v) => v.toJson()).toList();
-    }
-    data['name'] = this.name;
-    data['release_date'] = this.releaseDate;
-    data['release_date_precision'] = this.releaseDatePrecision;
-    data['type'] = this.type;
-    data['uri'] = this.uri;
-    return data;
-  }
+  @override
+  Map<String, dynamic> toJson() => {
+        'album_type': albumType,
+        if (artists != null) ...{
+          'artists': artists.map((v) => v.toJson()).toList(),
+        },
+        'available_markets': availableMarkets,
+        if (externalUrls != null) ...{
+          'external_urls': externalUrls.toJson(),
+        },
+        'href': href,
+        'id': id,
+        if (images != null) ...{
+          'images': images.map((v) => v.toJson()).toList(),
+        },
+        'name': name,
+        'release_date': releaseDate,
+        'release_date_precision': releaseDatePrecision,
+        'type': type,
+        'uri': uri,
+      };
 }

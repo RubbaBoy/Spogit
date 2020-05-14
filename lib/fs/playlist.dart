@@ -6,13 +6,18 @@ import 'package:Spogit/Spogit.dart';
 import 'package:Spogit/cache/id/id_resource_manager.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/local_storage.dart';
+import 'package:Spogit/json/album_simplified.dart';
+import 'package:Spogit/json/playlist_full.dart';
 import 'package:Spogit/utility.dart';
 import 'package:http/http.dart' as http;
 
-class SpogitRoot with SpotifyContainer {
+class SpogitRoot extends SpotifyContainer {
   final RootLocal rootLocal;
   final File meta;
   final File coverImage;
+
+  @override
+  final Spogit spogit;
 
   @override
   final Directory root;
@@ -25,7 +30,7 @@ class SpogitRoot with SpotifyContainer {
   @override
   List<Mappable> get children => _children ??= _traverseDir(root, null);
 
-  SpogitRoot(this.root,
+  SpogitRoot(this.spogit, this.root,
       {bool creating = false, List<String> tracking = const []})
       : rootLocal = RootLocal([root, 'local'].file),
         meta = [root, 'meta.json'].file..tryCreateSync(),
@@ -47,7 +52,7 @@ class SpogitRoot with SpotifyContainer {
           .map((dir) {
         var name = dir.uri.realName;
         if (dir.isPlaylist) {
-          return SpotifyPlaylist(name, dir.parent, parent);
+          return SpotifyPlaylist(spogit, name, dir.parent, parent);
         } else {
           final folder = SpotifyFolder(name, dir.parent, parent);
           folder.children = _traverseDir(dir, folder);
@@ -97,6 +102,7 @@ class RootLocal extends LocalStorage {
 }
 
 class SpotifyPlaylist extends Mappable {
+  final Spogit _spogit;
   final File coverImage;
   final File _songsFile;
   final File _meta;
@@ -104,9 +110,7 @@ class SpotifyPlaylist extends Mappable {
   String _imageUrl;
 
   set imageUrl(String url) {
-    print('url = $url');
     if (url != null && url != _imageUrl) {
-      print('CHANBGING!!!!');
       _imageUrl = url;
       imageChanged = true;
     }
@@ -142,7 +146,7 @@ class SpotifyPlaylist extends Mappable {
   /// The [name] is the name of the playlist. The [parentDirectory] is the
   /// filesystem directory of what this playlist's folder will be contained in.
   /// The [parentFolder] is the [SpotifyFolder] of the parent, this may be null.
-  SpotifyPlaylist(String name, Directory parentDirectory,
+  SpotifyPlaylist(this._spogit, String name, Directory parentDirectory,
       [SpotifyFolder parentFolder])
       : parent = parentFolder,
         coverImage = [parentDirectory, name, 'cover.jpg'].file,
@@ -158,7 +162,7 @@ class SpotifyPlaylist extends Mappable {
       .tryReadSync()
       .split(RegExp(r'^$', multiLine: true))
       .where((line) => line.trim().isNotEmpty)
-      .map((line) => SpotifySong.fromLine(line))
+      .map((line) => SpotifySong.fromLine(_spogit, line))
       .notNull()
       .toList();
 
@@ -179,7 +183,8 @@ class SpotifyPlaylist extends Mappable {
     if (songsHash == 0 || songsHash != currSongsHash) {
       songsHash = currSongsHash;
       await _songsFile.tryCreate();
-      await _songsFile.writeAsString('${(await songs.aMap((song) async => await song.toLine())).join('\n\n')}\n');
+      await _songsFile.writeAsString(
+          '${(await songs.aMap((song) async => await song.toLine())).join('\n\n')}\n');
     } else if (!_songsFile.existsSync()) {
       _songsFile.createSync();
     }
@@ -187,7 +192,8 @@ class SpotifyPlaylist extends Mappable {
     if (imageChanged) {
       imageChanged = false;
       if (_imageUrl != null) {
-        await coverImage.writeAsBytes(await http.get(_imageUrl).then((res) => res.bodyBytes));
+        await coverImage.writeAsBytes(
+            await http.get(_imageUrl).then((res) => res.bodyBytes));
       }
     }
   }
@@ -230,10 +236,23 @@ class SpotifySong {
 //  static final RegExp linkRegex = RegExp(
 //      r'<img.*?spotify:track:([a-zA-Z0-9]{22}).*?spotify:track:([a-zA-Z0-9]{22}).*?---');
   static final RegExp linkRegex =
-  RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
+      RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
 
   final String id;
-  final String albumId;
+
+  /// The ID of the album
+  String albumId;
+
+  /// The simplified album. This may be null
+  AlbumSimplified _album;
+
+  /// Gets or retrieves the [AlbumSimplified] from the constructor or [albumId].
+  FutureOr<AlbumSimplified> get album =>
+      _album ??
+      spogit.albumResourceManager
+          .getAlbum(albumId)
+          .then((full) => _album = full);
+
   Spogit spogit;
   String cachedLine;
 
@@ -249,13 +268,15 @@ class SpotifySong {
 //  }
 
   /// Creates a SpotifySong from a single track json element.
-  SpotifySong.fromJson(this.spogit, Map<String, dynamic> json)
-      : id = json.print()['track']['id'],
-        albumId = json['track']['id'];
+  SpotifySong.fromJson(this.spogit, PlaylistTrack playlistTrack)
+      : id = playlistTrack.print().track.id,
+        _album = playlistTrack.track.album {
+    albumId = _album.id;
+  }
 
   /// The [id] should be the parsed track ID, and the [artistName] is the full
   /// `Song - Artist` unparsed line from an existing link.
-  SpotifySong._create(this.id, this.albumId, [this.cachedLine]);
+  SpotifySong._create(this.spogit, this.id, this.albumId, [this.cachedLine]);
 
   /// Example of a song chunk:
   /// ```
@@ -264,7 +285,7 @@ class SpotifySong {
   /// [Goodbye & Good Riddance](https://open.spotify.com/go?uri=spotify:track:6tkjU4Umpo79wwkgPMV3nZ)
   /// ---
   /// ```
-  factory SpotifySong.fromLine(String songChunk) {
+  factory SpotifySong.fromLine(Spogit spogit, String songChunk) {
     var matches = linkRegex.allMatches(songChunk);
     if (matches.isEmpty) {
       return null;
@@ -273,17 +294,21 @@ class SpotifySong {
     print('Creating from $songChunk');
 
     var match = matches.first;
-    return SpotifySong._create(match.group(2), match.group(1), songChunk.trim());
+    return SpotifySong._create(
+        spogit, match.group(2), match.group(1), songChunk.trim());
   }
 
   FutureOr<String> toLine() async => cachedLine ??= await (() async {
-        var album = await spogit.albumResourceManager.getAlbum(id);
+        // add-remote "TestLocal" spotify:playlist:4C2CEMy00xKSzV0Xe5Ipww 885053d3775d000
+        var fetchedAlbum = await album;
         return '''
-        <img align="left" width="100" height="100" src="${album.images[0].url}">
-        ### [${await spogit.idResourceManager.getName(id, ResourceType.Track)}](https://open.spotify.com/go?uri=spotify:track:$id)
-        [${album.name}](https://open.spotify.com/go?uri=spotify:track:$albumId)
-        ---
-        ''';
+<img align="left" width="100" height="100" src="${fetchedAlbum.images[0].url}">
+
+### [${await spogit.idResourceManager.getName(id, ResourceType.Track)}](https://open.spotify.com/go?uri=spotify:track:$id)
+[${fetchedAlbum.name}](https://open.spotify.com/go?uri=spotify:track:$albumId)
+
+---
+''';
       })();
 
 //  FutureOr<String> toLine() =>
@@ -332,6 +357,8 @@ extension MappableChecker on Directory {
 
 /// An object that stores playlists and folders.
 abstract class SpotifyContainer {
+  Spogit spogit;
+
   /// The directory holding any data related to this container, including children.
   Directory get root;
 
@@ -371,7 +398,7 @@ abstract class SpotifyContainer {
 
   /// Creates a [SpotifyPlaylist] in the current container with the given name.
   SpotifyPlaylist addPlaylist(String name) =>
-      _createMappable(name, () => SpotifyPlaylist(name, root));
+      _createMappable(name, () => SpotifyPlaylist(spogit, name, root));
 
   /// Creates a [SpotifyFolder] in the current container with the given name.
   SpotifyFolder addFolder(String name) =>
@@ -381,7 +408,7 @@ abstract class SpotifyContainer {
   /// directly in the current container and not in any child. If no direct child
   /// is found with the given ID, it is added to the end of the child list.
   SpotifyPlaylist replacePlaylist(String id) =>
-      _replaceMappable(id, (name) => SpotifyPlaylist(name, root))
+      _replaceMappable(id, (name) => SpotifyPlaylist(spogit, name, root))
         ..spotifyId = id;
 
   /// Replaces a given [SpotifyFolder] by an existing [id]. This ID should be

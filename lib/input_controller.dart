@@ -1,20 +1,23 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:Spogit/Spogit.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
 
 class InputController {
+  final Spogit spogit;
   final DriverAPI driverAPI;
   final LocalManager localManager;
 
-  InputController(this.driverAPI, this.localManager);
+  InputController(this.spogit, this.localManager)
+      : driverAPI = spogit.driverAPI;
 
   void start() {
     print('Listening for commands...');
-    stdin.transform(utf8.decoder).listen((line) {
+    stdin.transform(utf8.decoder).listen((line) async {
       print('Data = $line');
 
       var index = line.indexOf(' ');
@@ -50,6 +53,11 @@ class InputController {
 
           print('Name = $name');
           print('Parsed IDs: $ids');
+
+          var local = LinkedPlaylist.fromRemote(spogit, localManager, name,
+              await driverAPI.playlistManager.analyzeBaseRevision(), ids);
+          localManager.addPlaylist(local);
+          await local.initElement();
           break;
         default:
           print('Couldn\'t recognise command "$command"');

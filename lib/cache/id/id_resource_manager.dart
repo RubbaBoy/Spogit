@@ -53,7 +53,7 @@ class IdResourceManager {
         return playlistManager.getTrack(id).then((json) => json.print().name);
         break;
       case ResourceType.Playlist:
-        return playlistManager.getPlaylistInfo(id).then((json) => json.print()['name']);
+        return playlistManager.getPlaylistInfo(id).then((json) => json.print().name);
       case ResourceType.Folder:
         return id.startsWith('spotify:start-group') ? id.replaceFirst('spotify:start-group:', '').safeSubstring(22)?.replaceAll('+', '') : null;
     }

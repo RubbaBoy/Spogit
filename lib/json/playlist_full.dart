@@ -60,7 +60,7 @@ class PlaylistFull with Jsonable {
     public = json['public'];
     snapshotId = json['snapshot_id'];
     tracks =
-    json['tracks'] != null ? Paging.fromJson(json['tracks']) : null;
+    json['tracks'] != null ? Paging<PlaylistTrack>.fromJson(json['tracks'], PlaylistTrack.jsonConverter) : null;
     type = json['type'];
     uri = json['uri'];
   }
@@ -122,6 +122,8 @@ class PlaylistTrack with Jsonable {
   TrackFull track;
 
   PlaylistTrack({this.addedAt, this.addedBy, this.isLocal, this.track});
+
+  static PlaylistTrack jsonConverter(Map<String, dynamic> json) => PlaylistTrack.fromJson(json);
 
   PlaylistTrack.fromJson(Map<String, dynamic> json) {
     addedAt = json['added_at'];

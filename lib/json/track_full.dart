@@ -52,7 +52,7 @@ class TrackFull with Jsonable {
         artists.add(new Artists.fromJson(v));
       });
     }
-    availableMarkets = json['available_markets'].cast<String>();
+    availableMarkets = json['available_markets']?.cast<String>();
     discNumber = json['disc_number'];
     durationMs = json['duration_ms'];
     explicit = json['explicit'];
