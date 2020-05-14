@@ -1,43 +1,64 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:Spogit/Spogit.dart';
 import 'package:Spogit/cache/cache_manager.dart';
-import 'package:Spogit/cache/playlist_cover.dart';
+import 'package:Spogit/cache/cover_resource.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/utility.dart';
 
+const bool APPLY_COVERS = false;
+
 class LocalManager {
+  final Spogit spogit;
   final DriverAPI driverAPI;
   final CacheManager cacheManager;
   final Directory root;
   final List<LinkedPlaylist> linkedPlaylists = [];
 
-  LocalManager(this.driverAPI, this.cacheManager, this.root);
+  LocalManager(this.spogit, this.driverAPI, this.cacheManager, this.root);
 
   /// Should be invoked once at the beginning for initialization.
-  List<LinkedPlaylist> getExistingRoots(BaseRevision baseRevision) {
+  Future<List<LinkedPlaylist>> getExistingRoots(BaseRevision baseRevision) async {
     linkedPlaylists.clear();
     for (var dir in root.listSync()) {
-      if ([dir, 'local'].file.existsSync()) {
-        print('Found a directory with local in it: ${dir.path}');
-        var linked = LinkedPlaylist.preLinked(this, dir);
+      if ([dir, 'meta.json'].file.existsSync()) {
+        print('Found a directory with a meta.json in it: ${dir.path}');
 
-        var rootLocal = linked.root.rootLocal;
+        if ([dir, 'local'].file.existsSync()) {
+          print('Directory has already been locally synced');
+          var linked = LinkedPlaylist.preLinked(this, dir);
 
-        print(
-            'rootLocalRev = ${rootLocal.revision} baseRev = ${baseRevision.revision}');
-        // TODO: Check if the contents have changed instead of just revision #
-        if (rootLocal.revision != baseRevision.revision) {
-          print('Revisions do not match, pulling Spotify changes to local');
+          print('Waiting 15 seconds...');
+          sleep(Duration(seconds: 10));
+          print('5 seconds remaining...');
+          sleep(Duration(seconds: 5));
 
-          // TODO: Do more in-depth checks to see if each of the shit being used has changed
+//          linked.root.rootLocal.tracking
 
-          linked.refreshFromRemote();
+          var rootLocal = linked.root.rootLocal;
+
+          print(
+              'rootLocalRev = ${rootLocal.revision} baseRev = ${baseRevision
+                  .revision}');
+          // TODO: Check if the contents have changed instead of just revision #
+          if (rootLocal.revision != baseRevision.revision) {
+            print('Revisions do not match, pulling Spotify changes to local');
+
+            // TODO: Do more in-depth checks to see if each of the shit being used has changed
+
+            await linked.refreshFromRemote();
+          }
+
+          linkedPlaylists.add(linked);
+        } else {
+          print('Directory has not been locally synced, creating and pushing to remote now');
+          var local = LinkedPlaylist.fromLocal(this, dir);
+          await local.initLocal(true);
+          linkedPlaylists.add(local);
         }
-
-        linkedPlaylists.add(linked);
       }
     }
 
@@ -54,7 +75,10 @@ class LocalManager {
   /// be updated and this new [url] will be returned. If the [url] matches the
   /// cached version, null is returned.
   String getCoverUrl(String id, String url) {
-    url ??= 'https://rubbaboy.me/images/etzacxs';
+    if (url == null) {
+      return null;
+    }
+
     var generated = cacheManager
         .getOrSync<PlaylistCoverResource>(
             id, () => PlaylistCoverResource(id, url),
@@ -65,6 +89,7 @@ class LocalManager {
 }
 
 class LinkedPlaylist {
+  final Spogit spogit;
   final LocalManager localManager;
   final CacheManager cacheManager;
   final DriverAPI driverAPI;
@@ -77,7 +102,8 @@ class LinkedPlaylist {
 
   /// Creates a [LinkedPlaylist] from
   LinkedPlaylist.preLinked(this.localManager, Directory directory)
-      : cacheManager = localManager.cacheManager,
+      : spogit = localManager.spogit,
+        cacheManager = localManager.cacheManager,
         driverAPI = localManager.driverAPI,
         root = SpogitRoot(directory) {
     elements = <RevisionElement>[];
@@ -87,7 +113,8 @@ class LinkedPlaylist {
   /// directory in ~/Spogit. Upon creation, this will update the Spotify API
   /// if no `local` files are found.
   LinkedPlaylist.fromLocal(this.localManager, Directory directory)
-      : cacheManager = localManager.cacheManager,
+      : spogit = localManager.spogit,
+        cacheManager = localManager.cacheManager,
         driverAPI = localManager.driverAPI,
         root = SpogitRoot(directory, creating: true) {
     print('Updating Spotify API');
@@ -102,7 +129,8 @@ class LinkedPlaylist {
   /// should not be fed a child playlist or folder.
   LinkedPlaylist.fromRemote(this.localManager, String name,
       BaseRevision baseRevision, List<String> elementIds)
-      : cacheManager = localManager.cacheManager,
+      : spogit = localManager.spogit,
+        cacheManager = localManager.cacheManager,
         driverAPI = localManager.driverAPI,
         root = SpogitRoot('~/Spogit/$name'.directory,
             creating: true, tracking: elementIds) {
@@ -131,13 +159,14 @@ class LinkedPlaylist {
     }
   }
 
-  Future<void> initLocal([bool forceCreate = true]) async {
-    Future<void> traverse(
+  /// Returns a list of root watching IDs
+  Future<List<String>> initLocal([bool forceCreate = true]) async {
+    Future<String> traverse(
         Mappable mappable, List<SpotifyFolder> parents) async {
       var to = parents.safeLast?.spotifyId;
 
       if (mappable.spotifyId != null && !forceCreate) {
-        return;
+        return null;
       }
 
       if (mappable is SpotifyPlaylist) {
@@ -145,28 +174,53 @@ class LinkedPlaylist {
 
         var id = (await playlists.createPlaylist(mappable.name, mappable.description))['id'];
 
-        await playlists.movePlaylist(id, toGroup: to);
+        if (APPLY_COVERS) {
+          await playlists.uploadCover(mappable.coverImage, id);
+        }
+
+        try {
+          await playlists.movePlaylist(id, toGroup: to);
+        } catch (e, s) {
+          print(e);
+          print(s);
+        }
 
         await playlists.addTracks(
             id, mappable.songs.map((song) => song.id).toList());
 
         print('Created previous with an ID of $id');
         mappable.spotifyId = id;
+        return id;
       } else if (mappable is SpotifyFolder) {
         print('Creating folder "${mappable.name}" in #$to');
 
         var id =
-            (await playlists.createFolder(mappable.name, toGroup: to))['id'];
+            (await playlists.createFolder(mappable.name, toGroup: to))['id'] as String;
         mappable.spotifyId = id;
 
-        mappable.children
-            .forEach((child) => traverse(child, [...parents, mappable]));
+//        mappable.children
+//            .forEach((child) => traverse(child, [...parents, mappable]));
+        for (var child in mappable.children) {
+          await traverse(child, [...parents, mappable]);
+        }
+
+        return id;
       }
+      return null;
     }
 
     var pl = root.children;
     print('playlist  = $pl');
-    pl.forEach((child) => traverse(child, []));
+    var res = <String>[];
+//    pl.forEach((child) async => );
+
+    for (var child in pl) {
+      res.add(await traverse(child, []));
+    }
+
+    root.rootLocal.tracking = res;
+
+    return res;
   }
 
 //  void traverse(Function(Mappable, List<SpotifyFolder>) callback) {
@@ -191,7 +245,7 @@ class LinkedPlaylist {
 
     await parseElementsToContainer(root, elements);
 
-    root.save();
+    await root.save();
 
     print('root =\n$root');
   }
@@ -201,7 +255,7 @@ class LinkedPlaylist {
     root.root.deleteSync(recursive: true);
     print('done');
     await initElement();
-    root.save();
+    await root.save();
   }
 
   Future<void> pullRemote(BaseRevision baseRevision, List<String> ids) async {
@@ -248,7 +302,7 @@ class LinkedPlaylist {
           ..imageUrl =
               localManager.getCoverUrl(id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
           ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
-              .map((track) => SpotifySong.fromJson(track)));
+              .map((track) => SpotifySong.fromJson(spogit, track)));
 
         await playlist.root.delete(recursive: true);
       } else if (element.type == ElementType.FolderStart) {
@@ -264,7 +318,7 @@ class LinkedPlaylist {
     print('Local list comprises of:');
     print(elements.map((el) => el.toString()).join('\n'));
 
-    root.save();
+    await root.save();
 
     print('root =\n$root');
   }
@@ -287,7 +341,7 @@ class LinkedPlaylist {
             ..imageUrl = localManager.getCoverUrl(
                 id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
             ..songs = List<SpotifySong>.from(playlistDetails['tracks']['items']
-                .map((track) => SpotifySong.fromJson(track)));
+                .map((track) => SpotifySong.fromJson(spogit, track)));
           break;
         case ElementType.FolderStart:
           current = (current.addFolder(element.name)..spotifyId = id);

@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:Spogit/Spogit.dart';
+import 'package:Spogit/cache/id/id_resource_manager.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/local_storage.dart';
 import 'package:Spogit/utility.dart';
-import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 class SpogitRoot with SpotifyContainer {
@@ -28,7 +29,7 @@ class SpogitRoot with SpotifyContainer {
       {bool creating = false, List<String> tracking = const []})
       : rootLocal = RootLocal([root, 'local'].file),
         meta = [root, 'meta.json'].file..tryCreateSync(),
-        coverImage = [root, 'cover.png'].file {
+        coverImage = [root, 'cover.jpg'].file {
     children;
     if (creating) {
       rootLocal
@@ -39,7 +40,11 @@ class SpogitRoot with SpotifyContainer {
 
   bool get isValid => meta.existsSync();
 
-  List<Mappable> _traverseDir(Directory dir, SpotifyFolder parent) => dir.listSync().whereType<Directory>().where((dir) => !dir.uri.realName.startsWith('.')).map((dir) {
+  List<Mappable> _traverseDir(Directory dir, SpotifyFolder parent) => dir
+          .listSync()
+          .whereType<Directory>()
+          .where((dir) => !dir.uri.realName.startsWith('.'))
+          .map((dir) {
         var name = dir.uri.realName;
         if (dir.isPlaylist) {
           return SpotifyPlaylist(name, dir.parent, parent);
@@ -50,9 +55,11 @@ class SpogitRoot with SpotifyContainer {
         }
       }).toList();
 
-  void save() {
+  Future<void> save() async {
     rootLocal.saveFile();
-    _children?.forEach((playlist) async => await playlist.save());
+    for (var playlist in _children ?? const []) {
+      await playlist.save();
+    }
   }
 
   @override
@@ -138,7 +145,7 @@ class SpotifyPlaylist extends Mappable {
   SpotifyPlaylist(String name, Directory parentDirectory,
       [SpotifyFolder parentFolder])
       : parent = parentFolder,
-        coverImage = [parentDirectory, name, 'cover.png'].file,
+        coverImage = [parentDirectory, name, 'cover.jpg'].file,
         _meta = [parentDirectory, name, 'meta.json'].file
           ..createSync(recursive: true),
         _songsFile = [parentDirectory, name, 'songs.md'].file
@@ -148,7 +155,9 @@ class SpotifyPlaylist extends Mappable {
   }
 
   List<SpotifySong> readSongs() => _songsFile
-      .readAsLinesSync()
+      .tryReadSync()
+      .split(RegExp(r'^$', multiLine: true))
+      .where((line) => line.trim().isNotEmpty)
       .map((line) => SpotifySong.fromLine(line))
       .notNull()
       .toList();
@@ -160,22 +169,26 @@ class SpotifyPlaylist extends Mappable {
     var currMetaHash = _metaJson?.customHash;
     if (metaHash == 0 || metaHash != currMetaHash) {
       metaHash = currMetaHash;
-      _meta
-        ..tryCreateSync()
-        ..writeAsStringSync(jsonEncode(meta));
+      await _meta.tryCreate();
+      await _meta.writeAsString(jsonEncode(meta));
+    } else if (!_meta.existsSync()) {
+      _meta.createSync();
     }
 
     var currSongsHash = _songs?.customHash;
     if (songsHash == 0 || songsHash != currSongsHash) {
       songsHash = currSongsHash;
-      _songsFile
-        ..tryCreateSync()
-        ..writeAsStringSync(songs.map((song) => song.toLine()).join('\n\n'));
+      await _songsFile.tryCreate();
+      await _songsFile.writeAsString('${(await songs.aMap((song) async => await song.toLine())).join('\n\n')}\n');
+    } else if (!_songsFile.existsSync()) {
+      _songsFile.createSync();
     }
 
     if (imageChanged) {
       imageChanged = false;
-      coverImage.writeAsBytesSync(await http.get(_imageUrl).then((res) => res.bodyBytes));
+      if (_imageUrl != null) {
+        await coverImage.writeAsBytes(await http.get(_imageUrl).then((res) => res.bodyBytes));
+      }
     }
   }
 
@@ -214,31 +227,42 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
 }
 
 class SpotifySong {
+//  static final RegExp linkRegex = RegExp(
+//      r'<img.*?spotify:track:([a-zA-Z0-9]{22}).*?spotify:track:([a-zA-Z0-9]{22}).*?---');
   static final RegExp linkRegex =
-      RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
+  RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
 
   final String id;
-  final String artistLine;
+  final String albumId;
+  Spogit spogit;
+  String cachedLine;
 
-  /// Creates a SpotifySong from individual pieces. The [id] should be a parsed
-  /// track ID.
-  SpotifySong(this.id, String artistName, String songName)
-      : artistLine = '$songName - $artistName' {
-    print('Artistline = $artistLine');
-  }
+//  /// If defined, [toLine] will output this. This comes directly from the
+//  /// markdown.
+//  String artistCode;
+
+//  /// Creates a SpotifySong from individual pieces. The [id] should be a parsed
+//  /// track ID.
+//  SpotifySong(this.id, String artistName, String songName)
+//      : artistLine = '$songName - $artistName' {
+//    print('Artistline = $artistLine');
+//  }
 
   /// Creates a SpotifySong from a single track json element.
-  SpotifySong.fromJson(Map<String, dynamic> json) :
-        id = json['track']['id'],
-        artistLine = '${parseArtists(json['track'])} - ${json['track']['name']}';
+  SpotifySong.fromJson(this.spogit, Map<String, dynamic> json)
+      : id = json.print()['track']['id'],
+        albumId = json['track']['id'];
 
   /// The [id] should be the parsed track ID, and the [artistName] is the full
   /// `Song - Artist` unparsed line from an existing link.
-  SpotifySong._create(this.id, this.artistLine);
+  SpotifySong._create(this.id, this.albumId, [this.cachedLine]);
 
   /// Example of a song chunk:
   /// ```
-  /// [Crazy - Gnarls Barkley](https://open.spotify.com/go?uri=spotify:track:2N5zMZX7YeL1tico8oQxa9)
+  /// <img align="left" width="100" height="100" src="https://i.scdn.co/image/ab67616d00001e02f7db43292a6a99b21b51d5b4">
+  /// ### [Lucid Dreams](https://open.spotify.com/go?uri=spotify:track:285pBltuF7vW8TeWk8hdRR)
+  /// [Goodbye & Good Riddance](https://open.spotify.com/go?uri=spotify:track:6tkjU4Umpo79wwkgPMV3nZ)
+  /// ---
   /// ```
   factory SpotifySong.fromLine(String songChunk) {
     var matches = linkRegex.allMatches(songChunk);
@@ -249,11 +273,21 @@ class SpotifySong {
     print('Creating from $songChunk');
 
     var match = matches.first;
-    return SpotifySong._create(match.group(2), match.group(1));
+    return SpotifySong._create(match.group(2), match.group(1), songChunk.trim());
   }
 
-  String toLine() =>
-      '[$artistLine](https://open.spotify.com/go?uri=spotify:track:$id)';
+  FutureOr<String> toLine() async => cachedLine ??= await (() async {
+        var album = await spogit.albumResourceManager.getAlbum(id);
+        return '''
+        <img align="left" width="100" height="100" src="${album.images[0].url}">
+        ### [${await spogit.idResourceManager.getName(id, ResourceType.Track)}](https://open.spotify.com/go?uri=spotify:track:$id)
+        [${album.name}](https://open.spotify.com/go?uri=spotify:track:$albumId)
+        ---
+        ''';
+      })();
+
+//  FutureOr<String> toLine() =>
+//      '[$artistCode](https://open.spotify.com/go?uri=spotify:track:$id)';
 
   @override
   bool operator ==(Object other) =>
@@ -384,11 +418,11 @@ extension IDUtils on List<String> {
 }
 
 String parseArtists(Map<String, dynamic> trackJson) {
-  var artistNames = List<String>.from(trackJson['artists'].map((data) => data['name']));
+  var artistNames =
+      List<String>.from(trackJson['artists'].map((data) => data['name']));
   if (artistNames.isEmpty) {
     return 'Unknown';
   }
 
   return artistNames.join(', ');
 }
-

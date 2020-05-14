@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:Spogit/cache/album/album_resource_manager.dart';
 import 'package:Spogit/cache/cache_manager.dart';
 import 'package:Spogit/cache/cache_types.dart';
-import 'package:Spogit/cache/playlist_cover.dart';
+import 'package:Spogit/cache/cover_resource.dart';
+import 'package:Spogit/cache/id/id_resource.dart';
+import 'package:Spogit/cache/id/id_resource_manager.dart';
 import 'package:Spogit/change_watcher.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
@@ -19,14 +22,17 @@ class Spogit {
   final ChangeWatcher changeWatcher;
   final DriverAPI driverAPI;
   final CacheManager cacheManager;
+  final IdResourceManager idResourceManager;
+  final AlbumResourceManager albumResourceManager;
 
   PlaylistManager get playlistManager => driverAPI?.playlistManager;
 
-  Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager);
+  Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager, this.idResourceManager, this.albumResourceManager);
 
   static Future<Spogit> createSpogit(File cacheFile) async {
     final cacheManager = CacheManager(cacheFile)
-      ..registerType(CacheType.PLAYLIST_COVER, (id, map) => PlaylistCoverResource.fromPacked(id, map));
+      ..registerType(CacheType.PLAYLIST_COVER, (id, map) => PlaylistCoverResource.fromPacked(id, map))
+      ..registerType(CacheType.ID, (id, map) => IdResource.fromPacked(id, map));
     await cacheManager.readCache();
     cacheManager.scheduleWrites();
 
@@ -35,11 +41,15 @@ class Spogit {
 
     final changeWatcher = ChangeWatcher(driverAPI);
     final gitHook = GitHook();
-    return Spogit._(gitHook, changeWatcher, driverAPI, cacheManager);
+
+    final idResourceManager = IdResourceManager(driverAPI.playlistManager, cacheManager);
+    final albumResourceManager = AlbumResourceManager(driverAPI.playlistManager, cacheManager);
+
+    return Spogit._(gitHook, changeWatcher, driverAPI, cacheManager, idResourceManager, albumResourceManager);
   }
 
   Future<void> start(Directory path) async {
-    final manager = LocalManager(driverAPI, cacheManager, path);
+    final manager = LocalManager(this, driverAPI, cacheManager, path);
     final inputController = InputController(driverAPI, manager);
 
     await gitHook.listen();
@@ -50,9 +60,19 @@ class Spogit {
         var foundLocal = manager.getPlaylist(wd);
         if (foundLocal == null) {
           print('Creating playlist at ${wd.path}');
+
+          changeWatcher.lock();
+
           var linked = LinkedPlaylist.fromLocal(manager, normalizeDir(wd).directory);
           manager.addPlaylist(linked);
-          await linked.initLocal();
+          var tracking = await linked.initLocal();
+          print('tracking: $tracking');
+          await linked.root.save();
+
+          Timer(Duration(seconds: 2), () {
+            changeWatcher.unlock();
+            print('Complete with everything!!!!');
+          });
         } else {
           print('Playlist already exists locally! No need to create it, updating from local...');
           await foundLocal.initLocal();
@@ -64,16 +84,16 @@ class Spogit {
 
     var currRevision = await playlistManager.analyzeBaseRevision();
 
-    final existing = manager.getExistingRoots(currRevision);
+    final existing = await manager.getExistingRoots(currRevision);
 
     print('Got ${existing.length} existing');
 
-    for (var exist in existing) {
-      await exist.initElement();
-      print('\nExisting:');
-      print(exist.root.rootLocal.id);
-      print(exist.root);
-    }
+//    for (var exist in existing) {
+//      await exist.initElement();
+//      print('\nExisting:');
+//      print(exist.root.rootLocal.id);
+//      print(exist.root);
+//    }
 
     changeWatcher.watchChanges(currRevision, existing,
         (baseRevision, linkedPlaylist, ids) {
@@ -83,6 +103,7 @@ class Spogit {
 
     print('Watching for playlist changes...');
     changeWatcher.watchPlaylistChanges((changed) async {
+      print('changed: ${changed.keys}');
       for (var id in changed.keys) {
         bruh:
         for (var exist in existing) {
@@ -95,7 +116,7 @@ class Spogit {
               ..imageUrl = manager.getCoverUrl(id, (SafeUtils(playlistDetails['images'])?.safeFirst ?? const {})['url'])
               ..songs = List<SpotifySong>.from(playlistDetails['tracks']
                       ['items']
-                  .map((track) => SpotifySong.fromJson(track)));
+                  .map((track) => SpotifySong.fromJson(this, track)));
             await searched.save();
 
             break bruh;
@@ -108,30 +129,6 @@ class Spogit {
 
     inputController.start();
   }
-
-//  void startDaemon(Directory path) {
-//    final watcher = FileWatcher(path);
-//
-//    /// Use the spotify API for stuff
-//    watcher.listenSpogit((root) {
-//      // Actual files changed spotify:playlist:4T8gh2JVgZoiGFutx04ErJ
-//      print('Spogit files have changed.');
-//      print(root.playlists.join('\n'));
-//    });
-//
-//    /// Modify files to reflect the Spotify API
-//    watcher.listenSpotify((entities) {
-//      // Order changed
-//      for (var entity in entities) {
-//        print('Moved $entity to ${entity.parent}');
-//      }
-//    }, (entities) {
-//      // Playlists changed
-//      for (var entity in entities) {
-//        print('Modified the contents of $entity');
-//      }
-//    });
-//  }
 
   bool directoryEquals(Directory one, Directory two) =>
       listEquals(normalizeDir(one), normalizeDir(two));

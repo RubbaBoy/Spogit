@@ -184,7 +184,7 @@ class WebDriverRunner {
 //              '--disable-spell-checking',
 //              '--disable-d3d11',
 //              '--disable-pinch',
-//              '--auto-open-devtools-for-tabs',
+              '--auto-open-devtools-for-tabs',
 //              '--disable-site-isolation-trials data:,'
             ],
           },

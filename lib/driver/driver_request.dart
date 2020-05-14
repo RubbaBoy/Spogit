@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver_utility.dart';
@@ -22,6 +21,7 @@ class RequestManager {
 
     StreamSubscription sub;
     sub = _communication.stream.listen((message) async {
+      print('Recieved socket data!');
       var headers = access(message.value['1'], 'headers');
 
       var authorization = access(headers, 'authorization');
@@ -46,7 +46,8 @@ class RequestManager {
       authCompleter.complete();
     });
 
-    _driver.execute('''
+    Future<void> tryShit() async {
+      _driver.execute('''
 const authSocket = new WebSocket(`ws://localhost:6979`);
 constantMock = window.fetch;
 window.fetch = function() {
@@ -57,16 +58,19 @@ window.fetch = function() {
 }
     ''', []);
 
-    (await getElement(_driver, By.cssSelector('a[href="/collection"]')))
-        ?.click();
+      (await getElement(_driver, By.cssSelector('a[href="/collection"]')))
+          ?.click();
 
-    if (_driver
-        .findElements(
-            By.cssSelector('div[aria-label="Something went wrong"] button'))
-        .isNotEmpty) {
-      print('Un on, restart your shit');
-      exit(0);
+      if (_driver
+          .findElements(
+          By.cssSelector('div[aria-label="Something went wrong"] button'))
+          .isNotEmpty && authToken == null) {
+        _driver.get('https://open.spotify.com/');
+        return tryShit();
+      }
     }
+
+    await tryShit();
 
     return authCompleter.future;
   }
@@ -120,7 +124,7 @@ class RequestMethod {
       (url, headers, body) => http.delete(url, headers: headers));
 
   static final RequestMethod Put = RequestMethod._(
-      (url, headers, body) => http.put(url, headers: headers));
+      (url, headers, body) => http.put(url, headers: headers, body: body));
 
   final Future<http.Response> Function(
       String url, Map<String, String> headers, dynamic body) request;

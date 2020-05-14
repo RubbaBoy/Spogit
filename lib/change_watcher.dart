@@ -7,16 +7,35 @@ import 'package:Spogit/utility.dart';
 
 class ChangeWatcher {
   final DriverAPI driverAPI;
+  bool _lock = false;
+  bool _nextUnlock = false;
+
+  // The last etag for the playlist tree request
+  String previousETag;
 
   ChangeWatcher(this.driverAPI);
 
+  void lock() {
+    _lock = true;
+    previousETag = '';
+  }
+
+  void unlock() {
+    _nextUnlock = true;
+  }
+
   /// Watches for changes in the playlist tree
   void watchAllChanges(Function(BaseRevision) callback) {
-    // The last etag for the playlist tree request
-    String previousETag;
 
     Timer.periodic(Duration(seconds: 2), (timer) async {
       var etag = await driverAPI.playlistManager.baseRevisionETag();
+
+      if (_lock) {
+        previousETag = etag;
+        _lock = !_nextUnlock;
+        return;
+      }
+
       if (etag == previousETag) {
         return;
       }
@@ -41,7 +60,7 @@ class ChangeWatcher {
     for (var exist in tracking) {
       var theseHashes = <String, int>{};
 
-      var trackingIds = exist.root.rootLocal.tracking;
+      var trackingIds = exist.root.rootLocal?.tracking;
       for (var track in trackingIds) {
         var hash = baseRevision.getHash(id: track);
         theseHashes[track] = hash;
@@ -74,7 +93,7 @@ class ChangeWatcher {
         if (difference.isNotEmpty) {
           print(
               'Difference between hashes! Reloading ${exist.root.root.uri.realName} trackingIds: $difference');
-          callback(revision, exist, difference);
+          callback(revision, exist, difference.toList());
         } else {
           print('No hash difference for ${exist.root.root.uri.realName}');
         }

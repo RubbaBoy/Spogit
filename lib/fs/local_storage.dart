@@ -8,7 +8,9 @@ abstract class LocalStorage {
   final Map<String, dynamic> _json;
   bool modified = false;
 
-  LocalStorage(this._file) : _json = {...tryJsonDecode(_file.tryReadSync())};
+  LocalStorage(this._file) : _json = {...tryJsonDecode(_file.tryReadSync())} {
+    print('LocalStorage[${_file.path}] = $_json');
+  }
 
   void saveFile() {
     if (modified) {

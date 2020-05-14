@@ -80,7 +80,7 @@ class CacheManager {
               'type': cache.type.id,
               'createdAt': cache.createdAt,
               'data': cache.pack()
-            }.print('Saving entry "$id": ')))));
+            }))));
     print('Cache file is ${file.lengthSync()} bytes');
   }
 
@@ -93,8 +93,16 @@ class CacheManager {
 
   /// Schedules writes for the given [Duration], or by default every 10 seconds
   /// only if the cache has been updated.
-  void scheduleWrites([Duration duration = const Duration(seconds: 10)]) =>
+  /// TODO: Change this back to 10 seconds or configurable
+  void scheduleWrites([Duration duration = const Duration(seconds: 3)]) =>
       Timer.periodic(duration, (_) async => await writeCache());
+
+  /// Gets if the cache contains the key.
+  bool containsKey(dynamic id) => cache.containsKey(id.customHash);
+
+  /// Gets all cache values of the given [type].
+  List<T> getAllOfType<T extends CachedResource>(CacheType<T> type) =>
+      cache.values.whereType<T>().toList();
 
   /// Identical to [getOr] but for always-synchronous [resourceGenerator]s.
   GetOrResult<T> getOrSync<T extends CachedResource>(dynamic id,
@@ -112,7 +120,7 @@ class CacheManager {
   /// [resourceGenerator] should be invoked regardless of expiration level.
   /// This is used for things like comparing internal data values of the
   /// resource.
-  FutureOr<GetOrResult<T>> getOr<T extends CachedResource>(dynamic id,
+  Future<GetOrResult<T>> getOr<T extends CachedResource>(dynamic id,
       FutureOr<CachedResource> Function() resourceGenerator,
       {bool Function(CachedResource) forceUpdate}) async {
     var handled = _handleGetOr(id, forceUpdate);

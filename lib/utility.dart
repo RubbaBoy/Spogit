@@ -100,6 +100,13 @@ extension StringUtils on String {
       .allMatches(this)
       .map((match) => match.group(1) ?? match.group(0))
       .toList();
+
+  String safeSubstring(int startIndex, [int endIndex]) {
+    if (startIndex >= length || (endIndex != null && startIndex >= startIndex + length)) {
+      return '';
+    }
+    return substring(startIndex, endIndex);
+  }
 }
 
 extension NumUtil on int {
@@ -256,6 +263,16 @@ extension CustomHash on dynamic {
   }
 }
 
-extension IterableUtils<T> on Iterable<T> {
-  Iterable<T> notNull() => where((value) => value != null);
+extension IterableUtils<E> on Iterable<E> {
+  Iterable<E> notNull() => where((value) => value != null);
+
+  /// Asynchronously maps the [mapper] function to the future of [T]. This
+  /// returns a new List as a result.
+  Future<Iterable<T>> aMap<T>(FutureOr<T> Function(E e) mapper) async {
+    var res = <T>[];
+    for (var t in this) {
+      res.add(await mapper(t));
+    }
+    return res;
+  }
 }
