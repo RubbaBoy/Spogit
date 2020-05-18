@@ -2,101 +2,64 @@ import 'package:Spogit/json/artist.dart';
 import 'package:Spogit/json/image.dart';
 import 'package:Spogit/json/json.dart';
 import 'package:Spogit/json/paging.dart';
-import 'package:Spogit/json/sub/external_ids.dart';
+import 'package:Spogit/json/playlist_simplified.dart';
 import 'package:Spogit/json/sub/external_url.dart';
 import 'package:Spogit/json/track_full.dart';
 
-class PlaylistFull with Jsonable {
-  bool collaborative;
+class PlaylistFull extends PlaylistSimplified with Jsonable {
   String description;
-  ExternalUrls externalUrls;
   Followers followers;
-  String href;
-  String id;
-  List<Images> images;
-  String name;
-  Artists owner;
-  bool public;
-  String snapshotId;
-  Paging<PlaylistTrack> tracks;
-  String type;
-  String uri;
 
   PlaylistFull(
-      {this.collaborative,
-        this.description,
-        this.externalUrls,
-        this.followers,
-        this.href,
-        this.id,
-        this.images,
-        this.name,
-        this.owner,
-        this.public,
-        this.snapshotId,
-        this.tracks,
-        this.type,
-        this.uri});
+      {bool collaborative,
+      this.description,
+      ExternalUrls externalUrls,
+      this.followers,
+      String href,
+      String id,
+      List<Images> images,
+      String name,
+      Artists owner,
+      bool public,
+      String snapshotId,
+      Paging<PlaylistTrack> tracks,
+      String type,
+      String uri})
+      : super(
+          collaborative: collaborative,
+          externalUrls: externalUrls,
+          href: href,
+          id: id,
+          images: images,
+          name: name,
+          owner: owner,
+          public: public,
+          snapshotId: snapshotId,
+          tracks: tracks,
+          type: type,
+          uri: uri,
+        );
 
-  PlaylistFull.fromJson(Map<String, dynamic> json) {
-    collaborative = json['collaborative'];
-    description = json['description'];
-    externalUrls = json['external_urls'] != null
-        ? new ExternalUrls.fromJson(json['external_urls'])
-        : null;
-    followers = json['followers'] != null
-        ? new Followers.fromJson(json['followers'])
-        : null;
-    href = json['href'];
-    id = json['id'];
-    if (json['images'] != null) {
-      images = new List<Images>();
-      json['images'].forEach((v) {
-        images.add(new Images.fromJson(v));
-      });
-    }
-    name = json['name'];
-    owner = json['owner'] != null ? Artists.fromJson(json['owner']) : null;
-    public = json['public'];
-    snapshotId = json['snapshot_id'];
-    tracks =
-    json['tracks'] != null ? Paging<PlaylistTrack>.fromJson(json['tracks'], PlaylistTrack.jsonConverter) : null;
-    type = json['type'];
-    uri = json['uri'];
-  }
+  static PlaylistFull jsonConverter(Map<String, dynamic> json) =>
+      PlaylistFull.fromJson(json);
+
+  PlaylistFull.fromJson(Map<String, dynamic> json)
+      : description = json['description'],
+        followers = json['followers'] != null
+            ? Followers.fromJson(json['followers'])
+            : null;
 
   @override
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['collaborative'] = this.collaborative;
-    data['description'] = this.description;
-    if (this.externalUrls != null) {
-      data['external_urls'] = this.externalUrls.toJson();
-    }
-    if (this.followers != null) {
-      data['followers'] = this.followers.toJson();
-    }
-    data['href'] = this.href;
-    data['id'] = this.id;
-    if (this.images != null) {
-      data['images'] = this.images.map((v) => v.toJson()).toList();
-    }
-    data['name'] = this.name;
-    if (this.owner != null) {
-      data['owner'] = this.owner.toJson();
-    }
-    data['public'] = this.public;
-    data['snapshot_id'] = this.snapshotId;
-    if (this.tracks != null) {
-      data['tracks'] = this.tracks.toJson();
-    }
-    data['type'] = this.type;
-    data['uri'] = this.uri;
-    return data;
-  }
+  Map<String, dynamic> toJson() => {
+        ...super.toJson(),
+        'description': description,
+        if (followers != null) ...{
+          'followers': followers.toJson(),
+        }
+      };
 }
 
-class Followers {
+class Followers with Jsonable {
   String href;
   int total;
 
@@ -107,12 +70,11 @@ class Followers {
     total = json['total'];
   }
 
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['href'] = this.href;
-    data['total'] = this.total;
-    return data;
-  }
+  @override
+  Map<String, dynamic> toJson() => {
+        'href': href,
+        'total': total,
+      };
 }
 
 class PlaylistTrack with Jsonable {
@@ -123,27 +85,26 @@ class PlaylistTrack with Jsonable {
 
   PlaylistTrack({this.addedAt, this.addedBy, this.isLocal, this.track});
 
-  static PlaylistTrack jsonConverter(Map<String, dynamic> json) => PlaylistTrack.fromJson(json);
+  static PlaylistTrack jsonConverter(Map<String, dynamic> json) =>
+      PlaylistTrack.fromJson(json);
 
   PlaylistTrack.fromJson(Map<String, dynamic> json) {
     addedAt = json['added_at'];
     addedBy =
-    json['added_by'] != null ? new Artists.fromJson(json['added_by']) : null;
+        json['added_by'] != null ? Artists.fromJson(json['added_by']) : null;
     isLocal = json['is_local'];
-    track = json['track'] != null ? new TrackFull.fromJson(json['track']) : null;
+    track = json['track'] != null ? TrackFull.fromJson(json['track']) : null;
   }
 
   @override
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['added_at'] = this.addedAt;
-    if (this.addedBy != null) {
-      data['added_by'] = this.addedBy.toJson();
-    }
-    data['is_local'] = this.isLocal;
-    if (this.track != null) {
-      data['track'] = this.track.toJson();
-    }
-    return data;
-  }
+  Map<String, dynamic> toJson() => {
+        'added_at': addedAt,
+        if (addedBy != null) ...{
+          'added_by': addedBy.toJson(),
+        },
+        'is_local': isLocal,
+        if (track != null) ...{
+          'track': track.toJson(),
+        }
+      };
 }

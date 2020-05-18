@@ -31,11 +31,6 @@ class LocalManager {
           print('Directory has already been locally synced');
           var linked = LinkedPlaylist.preLinked(spogit, this, dir);
 
-          print('Waiting 15 seconds...');
-          sleep(Duration(seconds: 10));
-          print('5 seconds remaining...');
-          sleep(Duration(seconds: 5));
-
 //          linked.root.rootLocal.tracking
 
           var rootLocal = linked.root.rootLocal;
@@ -43,12 +38,10 @@ class LocalManager {
           print(
               'rootLocalRev = ${rootLocal.revision} baseRev = ${baseRevision
                   .revision}');
+
           // TODO: Check if the contents have changed instead of just revision #
           if (rootLocal.revision != baseRevision.revision) {
             print('Revisions do not match, pulling Spotify changes to local');
-
-            // TODO: Do more in-depth checks to see if each of the shit being used has changed
-
             await linked.refreshFromRemote();
           }
 
@@ -175,12 +168,7 @@ class LinkedPlaylist {
           await playlists.uploadCover(mappable.coverImage, id);
         }
 
-        try {
-          await playlists.movePlaylist(id, toGroup: to);
-        } catch (e, s) {
-          print(e);
-          print(s);
-        }
+        await playlists.movePlaylist(id, toGroup: to);
 
         await playlists.addTracks(
             id, mappable.songs.map((song) => song.id).toList());
@@ -195,21 +183,18 @@ class LinkedPlaylist {
             (await playlists.createFolder(mappable.name, toGroup: to))['id'] as String;
         mappable.spotifyId = id;
 
-//        mappable.children
-//            .forEach((child) => traverse(child, [...parents, mappable]));
         for (var child in mappable.children) {
           await traverse(child, [...parents, mappable]);
         }
 
         return id;
       }
+
       return null;
     }
 
     var pl = root.children;
-    print('playlist  = $pl');
     var res = <String>[];
-//    pl.forEach((child) async => );
 
     for (var child in pl) {
       res.add(await traverse(child, []));
@@ -220,26 +205,8 @@ class LinkedPlaylist {
     return res;
   }
 
-//  void traverse(Function(Mappable, List<SpotifyFolder>) callback) {
-//    void bruh(Mappable mappable, List<SpotifyFolder> parents) {
-//      if (mappable is SpotifyPlaylist) {
-//        callback(mappable, parents);
-//      } else if (mappable is SpotifyFolder) {
-//        mappable.children.forEach((child) {
-//          callback(child, parents);
-//          bruh(child, [...parents, mappable]);
-//        });
-//      }
-//    }
-//
-//    root.children.forEach((child) => bruh(child, []));
-//  }
-
   /// Initializes the [root] with the set [elements] via [updateElements].
   Future<void> initElement() async {
-//    print('Local list comprises of:');
-//    print(elements.map((el) => el.toString()).join('\n'));
-
     await parseElementsToContainer(root, elements);
 
     await root.save();
@@ -248,22 +215,17 @@ class LinkedPlaylist {
   }
 
   Future<void> refreshFromRemote() async {
-    print('bout to ${root.root.path}');
     root.root.deleteSync(recursive: true);
-    print('done');
     await initElement();
     await root.save();
   }
 
   Future<void> pullRemote(BaseRevision baseRevision, List<String> ids) async {
-//    ids.parseAll();
-    print('mappablesssssssssssssss =');
     print(root.children.map((map) => map.spotifyId).join(', '));
     var mappables =
         root.children.where((mappable) => ids.contains(mappable.spotifyId));
 
     if (mappables.isEmpty) {
-      print('Nvm, mappables was empty');
       return;
     }
 
@@ -293,30 +255,26 @@ class LinkedPlaylist {
         var playlistDetails =
             await driverAPI.playlistManager.getPlaylistInfo(id);
 
-        var playlist = root.replacePlaylist(id)
+        root.replacePlaylist(id)
           ..name = element.name
           ..description = playlistDetails.description
           ..imageUrl =
               localManager.getCoverUrl(id, playlistDetails.images?.safeFirst?.url)
           ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
               .map((track) => SpotifySong.fromJson(spogit, track)));
-
-        // TODO: Inspect the effects on removing this delete. It didn't work as
-        //  before nothing was notified files were being deleted, so they were
-        //  never created unless they were modified from their previous value
-//        await playlist.root.delete(recursive: true);
       } else if (element.type == ElementType.FolderStart) {
         var replaced = root.replaceFolder(id);
-        print(
-            'sublisting [${element.index}, ${element.index + element.moveCount}]');
+        var start = element.index;
+        var end = element.index + element.moveCount;
+        if (++start >= --end) {
+          print('start >= end so not copying anything over');
+          continue;
+        }
+
         await parseElementsToContainer(replaced,
-            elements.sublist(element.index, element.index + element.moveCount));
-//        await replaced.root.delete(recursive: true);
+            elements.sublist(start, end));
       }
     }
-
-//    print('Local list comprises of:');
-//    print(elements.map((el) => el.toString()).join('\n'));
 
     await root.save();
 

@@ -121,8 +121,8 @@ class Spogit {
               ..description = playlistDetails.description
               ..imageUrl = manager.getCoverUrl(
                   id, playlistDetails.images?.safeFirst?.url)
-              ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
-                  .map((track) => SpotifySong.fromJson(this, track)));
+              ..songs = List<SpotifySong>.from(playlistDetails?.tracks?.items
+                  ?.map((track) => SpotifySong.fromJson(this, track)) ?? const []);
             await searched.save();
 
             break bruh;

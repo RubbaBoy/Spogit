@@ -80,7 +80,7 @@ class CacheManager {
               'type': cache.type.id,
               'createdAt': cache.createdAt,
               'data': cache.pack()
-            }))));
+            })).print()));
     print('Cache file is ${file.lengthSync()} bytes');
   }
 
@@ -93,8 +93,7 @@ class CacheManager {
 
   /// Schedules writes for the given [Duration], or by default every 10 seconds
   /// only if the cache has been updated.
-  /// TODO: Change this back to 10 seconds or configurable
-  void scheduleWrites([Duration duration = const Duration(seconds: 3)]) =>
+  void scheduleWrites([Duration duration = const Duration(seconds: 10)]) =>
       Timer.periodic(duration, (_) async => await writeCache());
 
   /// Gets if the cache contains the key.

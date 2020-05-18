@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver_utility.dart';
+import 'package:Spogit/json/json.dart';
+import 'package:Spogit/json/paging.dart';
 import 'package:Spogit/utility.dart';
 import 'package:http/http.dart' as http;
 import 'package:webdriver/sync_io.dart';
@@ -62,9 +64,10 @@ window.fetch = function() {
           ?.click();
 
       if (_driver
-          .findElements(
-          By.cssSelector('div[aria-label="Something went wrong"] button'))
-          .isNotEmpty && authToken == null) {
+              .findElements(By.cssSelector(
+                  'div[aria-label="Something went wrong"] button'))
+              .isNotEmpty &&
+          authToken == null) {
         _driver.get('https://open.spotify.com/');
         return tryShit();
       }
@@ -85,15 +88,10 @@ class DriverRequest {
   DriverRequest({
     String token,
     RequestMethod method,
-    Uri uri,
+    this.uri,
     this.body,
     Map<String, String> headers = const {},
   })  : method = method ?? RequestMethod.Post,
-        uri = uri.replace(queryParameters: {
-          // This is simply to stop Chrome from caching requests
-          ...{'time': '$now'},
-          ...uri.queryParameters
-        }),
         headers = {
           ...headers,
           ...{
@@ -106,8 +104,40 @@ class DriverRequest {
           }
         };
 
+  /// Sends the current request.
   Future<http.Response> send() =>
       method.send(uri.toString(), body: body, headers: headers);
+
+  /// Sends the current paging request. The [pageLimit] is the amount of items
+  /// requested per request. If [all] is true, it will keep requesting until all
+  /// items have been retrieved, which may take a while. If it is false, it will
+  /// request until [maxRequests] has been hit, or until all items have been
+  /// requested, whichever comes first.
+  Future<List<T>> sendPaging<T extends Jsonable>(T Function(Map<String, dynamic>) pagingConvert,
+      {int pageLimit = 50, int maxRequests = 1, bool all = false}) async {
+    var result = <T>[];
+
+    Paging<T> paging;
+    do {
+      var response = await _send(paging?.next ?? uri.replace(queryParameters: {
+        ...uri.queryParameters,
+        if (pageLimit != null) 'limit': pageLimit,
+        'offset': '0',
+      }));
+
+      if (response.statusCode >= 300) {
+        break;
+      }
+
+      paging = Paging<T>.fromJson(response.json, pagingConvert);
+      result.addAll(paging.items);
+    } while (--maxRequests > 0 || (all && paging.next != null));
+
+    return result;
+  }
+
+  Future<http.Response> _send(String uriString) =>
+      method.send(uriString, body: body, headers: headers);
 }
 
 class RequestMethod {

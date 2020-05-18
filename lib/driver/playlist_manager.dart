@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/json/album_full.dart';
-import 'package:Spogit/json/paging.dart';
 import 'package:Spogit/json/playlist_full.dart';
+import 'package:Spogit/json/playlist_simplified.dart';
 import 'package:Spogit/json/track_full.dart';
 import 'package:Spogit/json/track_simplified.dart';
 import 'package:Spogit/utility.dart';
@@ -30,26 +30,22 @@ class PlaylistManager {
   PlaylistManager._(this._driver, this._requestManager);
 
   static Future<PlaylistManager> createPlaylistManager(WebDriver driver,
-      RequestManager requestManager, JSCommunication communication) async {
-    return PlaylistManager._(driver, requestManager);
-  }
+          RequestManager requestManager, JSCommunication communication) async =>
+      PlaylistManager._(driver, requestManager);
 
-  /// Gets all playlist IDs and their snapshot IDs.
-  Future<Map<String, String>> getPlaylistSnapshots() async {
-    // TODO: Paginate these for proper usage!
-    var response = await DriverRequest(
-        method: RequestMethod.Get,
-        token: _requestManager.authToken,
-        uri: Uri.parse('$apiUrl/playlists')
-            .replace(queryParameters: {'limit': '50', 'offset': '0'})).send();
-
-    var res = <String, String>{};
-    for (var item in response.json['items'] ?? const []) {
-      res[item['id']] = item['snapshot_id'];
-    }
-
-    return res;
-  }
+  /// Gets all of a user's playlist IDs and their corresponding snapshot IDs.
+  Future<Map<String, String>> getPlaylistSnapshots() => DriverRequest(
+              method: RequestMethod.Get,
+              token: _requestManager.authToken,
+              uri: Uri.parse('$apiUrl/playlists'))
+          .sendPaging(PlaylistSimplified.jsonConverter, all: true)
+          .then((response) {
+        var res = <String, String>{};
+        for (var item in response) {
+          res[item.id] = item.snapshotId;
+        }
+        return res;
+      });
 
   /// Gets the ETag of the base revision to detect if any playlist order has
   /// changed yet.
@@ -96,7 +92,6 @@ class PlaylistManager {
         await makeRequest(useBase ? await analyzeBaseRevision() : null);
 
     if (response.statusCode >= 300) {
-//      throw 'Status ${response.statusCode}: ${response.json['error']['message']}';
       throw 'Status ${response.statusCode}: ${response.body}';
     }
 
@@ -106,30 +101,26 @@ class PlaylistManager {
   /// Gets an album by its ID.
   /// Returns an Album JSON object.
   /// <br><br>See [Get an Album](https://developer.spotify.com/documentation/web-api/reference/albums/get-album/)
-  Future<AlbumFull> getAlbum(String id) async {
-    return basedRequest(
-            (_) => DriverRequest(
-                    method: RequestMethod.Get,
-                    uri: Uri.parse('$apiBase/albums/$id')
-                        .replace(queryParameters: {'id': id}),
-                    token: _requestManager.authToken)
-                .send(),
-            false)
-        .then((json) => AlbumFull.fromJson(json));
-  }
-
-  /// Gets an album by its ID.
-  /// <br><br>See [Get an Album](https://developer.spotify.com/documentation/web-api/reference/albums/get-album/)
-  /// TODO: Paginate this for proper implementation
-  Future<Paging<TrackSimplified>> getAlbumTracks(String id) => basedRequest(
+  Future<AlbumFull> getAlbum(String id) => basedRequest(
           (_) => DriverRequest(
                   method: RequestMethod.Get,
-                  uri: Uri.parse('$apiBase/albums/$id/tracks')
+                  uri: Uri.parse('$apiBase/albums/$id')
                       .replace(queryParameters: {'id': id}),
                   token: _requestManager.authToken)
               .send(),
           false)
-      .then((json) => Paging.fromJson(json, TrackSimplified.jsonConverter));
+      .then((json) => AlbumFull.fromJson(json));
+
+  /// Gets an album's tracks by its ID. If [all] is true, it will get all
+  /// tracks. If false, it will only return the first 50.
+  /// <br><br>See [Get an Album](https://developer.spotify.com/documentation/web-api/reference/albums/get-album/)
+  Future<List<TrackSimplified>> getAlbumTracks(String id, [bool all = false]) =>
+      DriverRequest(
+              method: RequestMethod.Get,
+              uri: Uri.parse('$apiBase/albums/$id/tracks')
+                  .replace(queryParameters: {'id': id}),
+              token: _requestManager.authToken)
+          .sendPaging(TrackSimplified.jsonConverter, all: all);
 
   /// Moves the given playlist ID [moving] to a location. If [toGroup] is set,
   /// it is the group ID to move the playlist in. When that is set, [offset] is
@@ -325,8 +316,6 @@ class PlaylistManager {
   ///   to Spotify.
   /// <br><br>See [Upload a Custom Playlist Cover Image](https://developer.spotify.com/documentation/web-api/reference/playlists/upload-custom-playlist-cover/)
   Future<void> uploadCover(File file, String playlist) async {
-    sleep(Duration(milliseconds: 100)); // TODO: Proper rate limiting system!!!
-
     if (!(await file.exists())) {
       return;
     }
@@ -350,24 +339,26 @@ class PlaylistManager {
   /// Gets information on a single track by its [id].
   /// <br><br>See [Get a Track](https://developer.spotify.com/documentation/web-api/reference/tracks/get-track/)
   Future<TrackFull> getTrack(String id) => basedRequest(
-      (_) => DriverRequest(
-        method: RequestMethod.Get,
-            uri: Uri.parse('$apiBase/tracks/${id.parseId}'),
-            token: _requestManager.authToken,
-          ).send(),
-      false).then(TrackFull.jsonConverter);
+          (_) => DriverRequest(
+                method: RequestMethod.Get,
+                uri: Uri.parse('$apiBase/tracks/${id.parseId}'),
+                token: _requestManager.authToken,
+              ).send(),
+          false)
+      .then(TrackFull.jsonConverter);
 
   /// Gets information on multiple tracks by their [ids].
   /// <br><br>See [Get Several Tracks](https://developer.spotify.com/documentation/web-api/reference/tracks/get-several-tracks/)
   Future<List<TrackFull>> getTracks(List<String> ids) => basedRequest(
-      (_) => DriverRequest(
-          method: RequestMethod.Get,
-              uri: Uri.parse('$apiBase/tracks'),
-              token: _requestManager.authToken,
-              body: {
-                'ids': ids.map((id) => id.parseId).join(','),
-              }).send(),
-      false).then((json) => json['tracks'].map(TrackFull.jsonConverter).toList());
+          (_) => DriverRequest(
+                  method: RequestMethod.Get,
+                  uri: Uri.parse('$apiBase/tracks'),
+                  token: _requestManager.authToken,
+                  body: {
+                    'ids': ids.map((id) => id.parseId).join(','),
+                  }).send(),
+          false)
+      .then((json) => json['tracks'].map(TrackFull.jsonConverter).toList());
 }
 
 /// A flat, direct representation of the fetched base revision
@@ -471,30 +462,21 @@ class BaseRevision {
       }
     }
 
-//    print('\nGetting hash for ${element.name} (#${element.id})');
     for (var i = element.index; i < element.index + element.moveCount; i++) {
       var curr = elements[i];
-//      print('element ${curr.name} (#${element.id})');
       switch (curr.type) {
         case ElementType.Playlist:
           append(0x00);
-//          print('1 total = ${totalHash.toRadixString(16)}');
           append(curr.length);
-//          print('1 total = ${totalHash.toRadixString(16)}');
           append(0x00);
-//          print('1 total = ${totalHash.toRadixString(16)}');
           append(curr.id.hashCode);
-//          print('1 total = ${totalHash.toRadixString(16)}');
           append(0x00);
-//          print('1 total = ${totalHash.toRadixString(16)}');
           break;
         case ElementType.FolderStart:
           append(0x01);
-//          print('2 total = ${totalHash.toRadixString(16)}');
           break;
         case ElementType.FolderEnd:
           append(0x02);
-//          print('3 total = ${totalHash.toRadixString(16)}');
           break;
       }
     }
