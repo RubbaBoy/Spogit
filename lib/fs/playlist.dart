@@ -68,6 +68,14 @@ class SpogitRoot extends SpotifyContainer {
     }
   }
 
+  String treeString() {
+    var out = '';
+    for (var child in children) {
+      out += '${child.treeString(0)}\n';
+    }
+    return out;
+  }
+
   @override
   String toString() {
     return 'SpogitRoot{root: $root, meta: $meta, coverImage: $coverImage, _playlists: $_children}';
@@ -201,9 +209,10 @@ class SpotifyPlaylist extends Mappable {
   }
 
   @override
-  String toString() {
-    return 'SpotifyPlaylist{root: ${root.path}, meta: $meta, songs: $songs}';
-  }
+  String treeString([int depth = 0]) => '${'  ' * depth} $name #$spotifyId';
+
+  @override
+  String toString() => 'SpotifyPlaylist{root: ${root.path}, meta: $meta, songs: $songs}';
 }
 
 class SpotifyFolder extends Mappable with SpotifyContainer {
@@ -228,6 +237,15 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
     for (var child in children) {
       await child.save();
     }
+  }
+
+  @override
+  String treeString([int depth = 0]) {
+    var out = '${'  ' * depth} $name #$spotifyId';
+    for (var child in children) {
+      out += '\n${child.treeString(depth + 1)}';
+    }
+    return '$out';
   }
 
   @override
@@ -351,6 +369,8 @@ abstract class Mappable extends LocalStorage {
   set spotifyId(String id) => this['id'] = id;
 
   Future<void> save() async => saveFile();
+
+  String treeString([int depth = 0]);
 }
 
 extension MappableChecker on Directory {

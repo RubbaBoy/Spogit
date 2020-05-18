@@ -38,7 +38,7 @@ class PlaylistManager {
               method: RequestMethod.Get,
               token: _requestManager.authToken,
               uri: Uri.parse('$apiUrl/playlists'))
-          .sendPaging(PlaylistSimplified.jsonConverter, all: true)
+          .sendPaging((map) => PlaylistSimplified.jsonConverter<TracksObject>(map), all: true)
           .then((response) {
         var res = <String, String>{};
         for (var item in response) {

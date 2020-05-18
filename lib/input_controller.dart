@@ -18,21 +18,29 @@ class InputController {
   void start() {
     print('Listening for commands...');
     stdin.transform(utf8.decoder).listen((line) async {
-      print('Data = $line');
-
-      var index = line.indexOf(' ');
-      if (index == -1) {
-        return;
-      }
-
       var split = line.splitQuotes();
-      print('Split = "$split"');
 
       //    add-remote
       var command = split.safeFirst;
       var args = split.skip(1).toList();
 
       switch (command) {
+        case 'help':
+        case '?':
+          print('''
+=== Command help ===
+
+add-remote "My Demo" spotify:playlist:41fMgMIEZJLJjJ9xbzYar6 27345c6f477d000
+    Adds a list of playlist or folder IDs to the local Spogit root with the given name.
+  
+status
+    Lists the linked repos and playlists
+  
+list
+    Lists your Spotify accounts' playlist and folder names and IDs.
+
+===''');
+          break;
         case 'ar':
         case 'add-remote':
           if (args.length < 2) {
@@ -51,18 +59,53 @@ class InputController {
           var ids =
               args.skip(1).map((str) => ParsingUtils(str).parseId).toList();
 
-          print('Name = $name');
-          print('Parsed IDs: $ids');
-
           var local = LinkedPlaylist.fromRemote(spogit, localManager, name,
               await driverAPI.playlistManager.analyzeBaseRevision(), ids);
           localManager.addPlaylist(local);
           await local.initElement();
           break;
+        case 'status':
+          for (var value in localManager.linkedPlaylists) {
+            print('\nSpogit/${value.root.root.uri.realName}:');
+            print(value.root.treeString());
+          }
+          break;
+        case 'list':
+          print('''
+
+Listing of all current Spotify tree data.
+Key:
+P - Playlist. ID starts with spotify:playlist
+S - Group start. ID starts with spotify:start-group
+E - Group end. ID starts with spotify:end-group
+
+''');
+          var base = await driverAPI.playlistManager.analyzeBaseRevision();
+          var depth = 0;
+          var nameMap = <String, String>{};
+          for (var element in base.elements) {
+            String line(String type, [String name]) => '${'  ' * depth} [$type] ${name ?? element.name} #${element.id}';
+            switch(element.type) {
+              case ElementType.Playlist:
+                print(line('P'));
+                break;
+              case ElementType.FolderStart:
+                nameMap[element.id] = element.name;
+                print(line('S'));
+                depth++;
+                break;
+              case ElementType.FolderEnd:
+                depth--;
+                print(line('E', nameMap[element.id]));
+                break;
+            }
+          }
+          break;
         default:
           print('Couldn\'t recognise command "$command"');
           break;
       }
+      print('');
     });
   }
 }

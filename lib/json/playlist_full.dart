@@ -6,7 +6,7 @@ import 'package:Spogit/json/playlist_simplified.dart';
 import 'package:Spogit/json/sub/external_url.dart';
 import 'package:Spogit/json/track_full.dart';
 
-class PlaylistFull extends PlaylistSimplified with Jsonable {
+class PlaylistFull extends PlaylistSimplified<Paging<PlaylistTrack>> with Jsonable {
   String description;
   Followers followers;
 

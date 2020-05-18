@@ -107,6 +107,21 @@ extension StringUtils on String {
     }
     return substring(startIndex, endIndex);
   }
+
+  String blockTrim() {
+    var lines = split('\n');
+    var mi = lines.map((line) => line.leftSpace).reduce(min);
+    return lines.map((line) => line.substring(mi)).join('\n');
+  }
+
+  int get leftSpace {
+    for (var i = 0; i < length; i++) {
+      if (this[i] != ' ') {
+        return i;
+      }
+    }
+    return length;
+  }
 }
 
 extension NumUtil on int {
