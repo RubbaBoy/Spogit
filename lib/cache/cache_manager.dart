@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:Spogit/cache/cache_types.dart';
@@ -68,14 +69,14 @@ class CacheManager {
 
   /// Writes all caches to the cache file if they have been modified.
   Future<void> writeCache() async {
-    if (!modified) {
+    if (!modified || true) {
       return;
     }
 
     print('Writing caches...');
     modified = false;
-    var file = await cacheFile.writeAsBytes(
-        msgpack.serialize(cache.map((id, cache) =>
+    var file = await cacheFile.writeAsString(
+        jsonEncode(cache.map((id, cache) =>
             MapEntry(id, {
               'type': cache.type.id,
               'createdAt': cache.createdAt,

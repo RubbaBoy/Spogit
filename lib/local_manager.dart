@@ -260,8 +260,8 @@ class LinkedPlaylist {
           ..description = playlistDetails.description
           ..imageUrl =
               localManager.getCoverUrl(id, playlistDetails.images?.safeFirst?.url)
-          ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
-              .map((track) => SpotifySong.fromJson(spogit, track)));
+          ..songs = List<SpotifySong>.from(playlistDetails?.tracks?.items
+              ?.map((track) => SpotifySong.fromJson(spogit, track)) ?? const []);
       } else if (element.type == ElementType.FolderStart) {
         var replaced = root.replaceFolder(id);
         var start = element.index;
@@ -292,14 +292,17 @@ class LinkedPlaylist {
           var playlistDetails =
               await driverAPI.playlistManager.getPlaylistInfo(id);
 
+          print('Parsing ${element.name}:');
+          print(playlistDetails.toJson());
+
           current.addPlaylist(element.name)
             ..spotifyId = id
             ..name = element.name
             ..description = playlistDetails.description
             ..imageUrl = localManager.getCoverUrl(
                 id, playlistDetails.images?.safeFirst?.url)
-            ..songs = List<SpotifySong>.from(playlistDetails.tracks.items
-                .map((track) => SpotifySong.fromJson(spogit, track)));
+            ..songs = List<SpotifySong>.from(playlistDetails?.tracks?.items
+                ?.map((track) => SpotifySong.fromJson(spogit, track)) ?? const []);
           break;
         case ElementType.FolderStart:
           current = (current.addFolder(element.name)..spotifyId = id);

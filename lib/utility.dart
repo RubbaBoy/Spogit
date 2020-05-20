@@ -55,6 +55,22 @@ V access<K, V>(Map<K, V> map, K key, [V def]) {
   return val ?? def;
 }
 
+File dynamicFile(dynamic file) {
+  if (file is File) {
+    return file;
+  } else if (file is String) {
+    return file.file;
+  } else if (file is List) {
+    return file.file;
+  } else {
+    throw 'Invalid type for file: ${file.runtimeType}';
+  }
+}
+
+/// Checks whether [T1] is a (not necessarily proper) subtype of [T2].
+/// <br><br>Author: [Irn](https://stackoverflow.com/a/50198267/3929546)
+bool isSubtype<T1, T2>() => <T1>[] is List<T2>;
+
 // Json utils
 
 Map<String, dynamic> jsonify(Map<dynamic, dynamic> map) =>
@@ -122,6 +138,18 @@ extension StringUtils on String {
     }
     return length;
   }
+
+  /// Pipes the string to the [file] on the right. This [file] may be either a
+  /// [String] path, or a [File]. If the file is not created, it will create it.
+  /// Returns the [File] being written to.
+  File operator >>(dynamic file) {
+    var realFile = dynamicFile(file);
+    realFile.writeAsStringSync(this, mode: FileMode.writeOnly);
+    return realFile;
+  }
+
+  /// Removes [amount] characters from the end of the string.
+  String operator -(int amount) => substring(0, max(0, length - amount));
 }
 
 extension NumUtil on int {

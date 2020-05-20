@@ -47,7 +47,8 @@ class PlaylistFull extends PlaylistSimplified<Paging<PlaylistTrack>> with Jsonab
       : description = json['description'],
         followers = json['followers'] != null
             ? Followers.fromJson(json['followers'])
-            : null;
+            : null,
+        super.fromJson(json);
 
   @override
   Map<String, dynamic> toJson() => {

@@ -4,6 +4,7 @@ import 'package:Spogit/json/json.dart';
 import 'package:Spogit/json/paging.dart';
 import 'package:Spogit/json/playlist_full.dart';
 import 'package:Spogit/json/sub/external_url.dart';
+import 'package:Spogit/utility.dart';
 
 /// [T] is the type of the [tracks] object. In most cases, this should be a
 /// [Paging<PlaylistTrack>], however in some instances such as listing playlists,
@@ -57,7 +58,8 @@ class PlaylistSimplified<T extends Jsonable> with Jsonable {
     public = json['public'];
     snapshotId = json['snapshot_id'];
 
-    if (T == Paging) {
+    if (isSubtype<T, Paging>()) {
+      print('json of tracks:\n${json['tracks']}');
       tracks = (json['tracks'] != null
           ? Paging<PlaylistTrack>.fromJson(
               json['tracks'], PlaylistTrack.jsonConverter)

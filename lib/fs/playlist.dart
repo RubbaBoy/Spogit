@@ -8,6 +8,8 @@ import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/fs/local_storage.dart';
 import 'package:Spogit/json/album_simplified.dart';
 import 'package:Spogit/json/playlist_full.dart';
+import 'package:Spogit/markdown/readme.dart';
+import 'package:Spogit/markdown/table_generator.dart';
 import 'package:Spogit/utility.dart';
 import 'package:http/http.dart' as http;
 
@@ -15,6 +17,7 @@ class SpogitRoot extends SpotifyContainer {
   final RootLocal rootLocal;
   final File meta;
   final File coverImage;
+  final File readme;
 
   @override
   final Spogit spogit;
@@ -34,10 +37,13 @@ class SpogitRoot extends SpotifyContainer {
       {bool creating = false, List<String> tracking = const []})
       : rootLocal = RootLocal([root, 'local'].file),
         meta = [root, 'meta.json'].file..tryCreateSync(),
-        coverImage = [root, 'cover.jpg'].file {
+        coverImage = [root, 'cover.jpg'].file,
+        readme = [root, 'README.md'].file {
     print('MAKING ROOT!!!!! root dir is: ${root.path}');
     children;
     if (creating) {
+      'local' >> [root, '.gitignore'];
+
       rootLocal
         ..id = randomHex(16)
         ..tracking = tracking;
@@ -63,9 +69,17 @@ class SpogitRoot extends SpotifyContainer {
 
   Future<void> save() async {
     rootLocal.saveFile();
-    for (var playlist in _children ?? const []) {
+    var images = <String>[];
+
+    for (var playlist in _children ?? const <Mappable>[]) {
       await playlist.save();
+      images.add(playlist.readmeSnippet());
     }
+
+    var parsed = Readme.parse(await readme.tryRead())
+      ..title = root.uri.realName
+      ..content = TableGenerator(images).generate();
+    parsed.create() >> readme;
   }
 
   String treeString() {
@@ -168,13 +182,15 @@ class SpotifyPlaylist extends Mappable {
     print('Playlist in ${parentDirectory.path}/$name');
   }
 
-  List<SpotifySong> readSongs() => _songsFile
-      .tryReadSync()
-      .split(RegExp(r'^$', multiLine: true))
-      .where((line) => line.trim().isNotEmpty)
-      .map((line) => SpotifySong.fromLine(_spogit, line))
-      .notNull()
-      .toList();
+  List<SpotifySong> readSongs() {
+    var read = Readme.parse(_songsFile.tryReadSync());
+    return read.content
+        .split(RegExp(r'^$', multiLine: true))
+        .where((line) => line.trim().isNotEmpty)
+        .map((line) => SpotifySong.fromLine(_spogit, line))
+        .notNull()
+        .toList();
+  }
 
   @override
   Future<void> save() async {
@@ -190,11 +206,20 @@ class SpotifyPlaylist extends Mappable {
     }
 
     var currSongsHash = _songs?.customHash;
+    print('[$name] ($songsHash == 0 || $songsHash != $currSongsHash');
     if (songsHash == 0 || songsHash != currSongsHash) {
+      print('TRUE! Songs saving: ${songs.length}');
       songsHash = currSongsHash;
       await _songsFile.tryCreate();
-      await _songsFile.writeAsString(
-          '${(await songs.aMap((song) async => await song.toLine())).join('\n\n')}\n');
+
+      Readme.createTitled(
+                  title: name,
+                  description: description,
+                  content:
+                      (await songs.aMap((song) async => await song.toLine()))
+                          .join('\n\n'))
+              .create() >>
+          _songsFile;
     } else if (!_songsFile.existsSync()) {
       _songsFile.createSync();
     }
@@ -211,11 +236,19 @@ class SpotifyPlaylist extends Mappable {
   @override
   String treeString([int depth = 0]) => '${'  ' * depth} $name #$spotifyId';
 
+  // TODO: Change songs.md to the README when description and whatnot is added maybe
   @override
-  String toString() => 'SpotifyPlaylist{root: ${root.path}, meta: $meta, songs: $songs}';
+  String readmeSnippet() =>
+      '<a href="$name/songs.md"><img width="150" height="150" src="${coverImage.existsSync() ? '$name/cover.jpg' : 'https://rubbaboy.me/images/d4w3yqc'}"><br><b>$name<b></a>';
+
+  @override
+  String toString() =>
+      'SpotifyPlaylist{root: ${root.path}, meta: $meta, songs: $songs}';
 }
 
 class SpotifyFolder extends Mappable with SpotifyContainer {
+  File readme;
+
   @override
   String get name => root.uri.realName;
 
@@ -228,15 +261,37 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
   SpotifyFolder(String name, Directory parentDirectory, this.parent,
       [List<Mappable> children])
       : children = children ?? <Mappable>[],
-        super([parentDirectory, name].directory);
+        super([parentDirectory, name].directory) {
+    readme = [root, 'README.md'].file;
+  }
+
+  /// Folder image: https://rubbaboy.me/images/uuy0w5i
+  /// Empty playlist image: https://rubbaboy.me/images/d4w3yqc
+  @override
+  String readmeSnippet() =>
+      '<a href="$name"><img width="150" height="150" src="https://rubbaboy.me/images/uuy0w5i"><br><b>$name<b></a>';
 
   @override
   Future<void> save() async {
     await super.save();
 
+    var images = <String>[];
+
     for (var child in children) {
       await child.save();
+      images.add(child.readmeSnippet());
     }
+
+    var str = await readme.tryRead();
+
+    var desc = str != null ? descriptionRegex.firstMatch(str)?.group(1) : null;
+
+    Readme.createTitled(
+                title: name,
+                description: desc,
+                content: TableGenerator(images).generate())
+            .create() >>
+        readme;
   }
 
   @override
@@ -255,11 +310,6 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
 }
 
 class SpotifySong {
-//  static final RegExp linkRegex = RegExp(
-//      r'<img.*?spotify:track:([a-zA-Z0-9]{22}).*?spotify:track:([a-zA-Z0-9]{22}).*?---');
-  static final RegExp linkRegex =
-      RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
-
   final String id;
 
   /// The ID of the album
@@ -371,6 +421,11 @@ abstract class Mappable extends LocalStorage {
   Future<void> save() async => saveFile();
 
   String treeString([int depth = 0]);
+
+  /// Creates a snippet of markdown to put in a README file displaying the
+  /// current object in a list. This should be something like a cover image
+  /// or similar, around 75px square.
+  String readmeSnippet();
 }
 
 extension MappableChecker on Directory {
