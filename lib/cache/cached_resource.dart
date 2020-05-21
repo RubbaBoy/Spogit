@@ -12,7 +12,7 @@ abstract class CachedResource<T> {
 
   /// Packs the [data] of the resource. The [id] and [type] are already handled
   /// and should not be a factor in this packing.
-  Map pack();
+  Map<String, dynamic> pack();
 
   /// If more seconds than the [type]'s ttl has passed.
   bool isExpired() => now - createdAt > type.ttl;

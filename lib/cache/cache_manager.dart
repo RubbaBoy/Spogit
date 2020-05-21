@@ -38,8 +38,8 @@ class CacheManager {
       return;
     }
 
-    var unpacked = msgpack.deserialize(await cacheFile.readAsBytes()) as Map;
-    for (int id in unpacked.keys) {
+    var unpacked = jsonDecode(await cacheFile.readAsString()) as Map;
+    for (var id in unpacked.keys) {
       /*
       12345678: { // The ID
         'type': 1,
@@ -50,6 +50,7 @@ class CacheManager {
       var data = unpacked[id];
       var type = data['type'];
       var generator = functionGenerator[type];
+      id = (id as String).parseInt();
 
       if (generator == null) {
         log.warning('No generator found for resource type $type');
@@ -69,20 +70,22 @@ class CacheManager {
 
   /// Writes all caches to the cache file if they have been modified.
   Future<void> writeCache() async {
-    if (!modified || true) {
+    if (!modified) {
       return;
     }
 
-    print('Writing caches...');
+    log.fine('Writing caches...');
     modified = false;
+
     var file = await cacheFile.writeAsString(
         jsonEncode(cache.map((id, cache) =>
-            MapEntry(id, {
+            MapEntry('$id', {
               'type': cache.type.id,
               'createdAt': cache.createdAt,
               'data': cache.pack()
-            })).print()));
-    print('Cache file is ${file.lengthSync()} bytes');
+            }))));
+
+    log.fine('Cache file is ${file.lengthSync()} bytes');
   }
 
   /// Removes all cache elements with an ID in the given [keys] list.

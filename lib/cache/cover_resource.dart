@@ -10,7 +10,7 @@ class PlaylistCoverResource extends CachedResource<String> {
       : super(id, CacheType.PLAYLIST_COVER, now, map['data']['url']);
 
   @override
-  Map pack() => {'url': data};
+  Map<String, dynamic> pack() => {'url': data};
 
   @override
   String toString() => 'PlaylistCoverResource{id = $id, url = $data}';

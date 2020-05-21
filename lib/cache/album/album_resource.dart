@@ -13,7 +13,7 @@ class AlbumResource extends CachedResource<AlbumFull> {
       : super(id, CacheType.ID, now, map['data']);
 
   @override
-  Map pack() => data.toJson();
+  Map<String, dynamic> pack() => data.toJson();
 
   @override
   String toString() => 'AlbumResource{id = $id, data = $data}';

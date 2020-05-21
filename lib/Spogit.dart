@@ -15,8 +15,11 @@ import 'package:Spogit/git_hook.dart';
 import 'package:Spogit/input_controller.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
+import 'package:logging/logging.dart';
 
 class Spogit {
+  final log = Logger('Spogit');
+
   final GitHook gitHook;
   final ChangeWatcher changeWatcher;
   final DriverAPI driverAPI;
@@ -29,7 +32,7 @@ class Spogit {
   Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager,
       this.idResourceManager, this.albumResourceManager);
 
-  static Future<Spogit> createSpogit(File cacheFile) async {
+  static Future<Spogit> createSpogit(File cookiesFile, File chromedriverFile, File cacheFile) async {
     final cacheManager = CacheManager(cacheFile)
       ..registerType(CacheType.PLAYLIST_COVER,
           (id, map) => PlaylistCoverResource.fromPacked(id, map))
@@ -37,7 +40,7 @@ class Spogit {
     await cacheManager.readCache();
     cacheManager.scheduleWrites();
 
-    final driverAPI = DriverAPI();
+    final driverAPI = DriverAPI(cookiesFile, chromedriverFile);
     await driverAPI.startDriver();
 
     final changeWatcher = ChangeWatcher(driverAPI);
@@ -63,7 +66,7 @@ class Spogit {
       if (directoryEquals(wd.parent, path)) {
         var foundLocal = manager.getPlaylist(wd);
         if (foundLocal == null) {
-          print('Creating playlist at ${wd.path}');
+          log.info('Creating playlist at ${wd.path}');
 
           changeWatcher.lock();
 
@@ -74,17 +77,14 @@ class Spogit {
           print('tracking: $tracking');
           await linked.root.save();
 
-          Timer(Duration(seconds: 2), () {
-            changeWatcher.unlock();
-            print('Complete with everything!!!!');
-          });
+          Timer(Duration(seconds: 2), () => changeWatcher.unlock());
         } else {
-          print(
+          log.info(
               'Playlist already exists locally! No need to create it, updating from local...');
           await foundLocal.initLocal();
         }
       } else {
-        print('Not a direct child in ${path.path}');
+        log.warning('Not a direct child in ${path.path}');
       }
     });
 
@@ -92,24 +92,13 @@ class Spogit {
 
     final existing = await manager.getExistingRoots(currRevision);
 
-    print('Got ${existing.length} existing');
-
-//    for (var exist in existing) {
-//      await exist.initElement();
-//      print('\nExisting:');
-//      print(exist.root.rootLocal.id);
-//      print(exist.root);
-//    }
+    log.info('Got ${existing.length} existing');
 
     changeWatcher.watchChanges(currRevision, existing,
-        (baseRevision, linkedPlaylist, ids) {
-      print('Pulling remote');
-      linkedPlaylist.pullRemote(baseRevision, ids);
-    });
+        (baseRevision, linkedPlaylist, ids) => linkedPlaylist.pullRemote(baseRevision, ids));
 
-    print('Watching for playlist changes...');
+    log.info('Watching for playlist changes...');
     changeWatcher.watchPlaylistChanges((changed) async {
-      print('changed: ${changed.keys}');
       for (var id in changed.keys) {
         bruh:
         for (var exist in existing) {
@@ -130,7 +119,7 @@ class Spogit {
         }
       }
 
-      print('Updated change stuff');
+      log.info('Updated change stuff');
     });
 
     inputController.start();

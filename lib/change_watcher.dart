@@ -4,8 +4,11 @@ import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
+import 'package:logging/logging.dart';
 
 class ChangeWatcher {
+  final log = Logger('ChangeWatcher');
+
   final DriverAPI driverAPI;
   bool _lock = false;
   bool _nextUnlock = false;
@@ -45,7 +48,7 @@ class ChangeWatcher {
       previousETag = etag;
 
       if (sendCallback) {
-        print('\n\nPlaylist tree has changed!');
+        log.fine('Playlist tree has changed!');
         callback(await driverAPI.playlistManager.analyzeBaseRevision());
       }
     });
@@ -70,7 +73,7 @@ class ChangeWatcher {
     }
 
     watchAllChanges((revision) async {
-      print('It has changed on the Spotify side!');
+      log.fine('It has changed on the Spotify side!');
 
       for (var exist in tracking) {
         // The fully qualified track/playlist ID and its hash
@@ -85,17 +88,17 @@ class ChangeWatcher {
         var prevHash = {...previousHashes.putIfAbsent(exist, () => {})};
 
         var difference = _getDifference(prevHash, theseHashes).keys;
-        print(
+        log.fine(
             'previous = ${prevHash.keys.toList().map((k) => '$k: ${prevHash[k].toRadixString(16)}').join(', ')}');
-        print(
+        log.fine(
             'theseHashes = ${theseHashes.keys.toList().map((k) => '$k: ${theseHashes[k].toRadixString(16)}').join(', ')}');
 
         if (difference.isNotEmpty) {
-          print(
+          log.fine(
               'Difference between hashes! Reloading ${exist.root.root.uri.realName} trackingIds: $difference');
           callback(revision, exist, difference.toList());
         } else {
-          print('No hash difference for ${exist.root.root.uri.realName}');
+          log.fine('No hash difference for ${exist.root.root.uri.realName}');
         }
 
         previousHashes[exist] = theseHashes;

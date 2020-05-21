@@ -6,35 +6,26 @@ import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/driver_utility.dart';
+import 'package:Spogit/utility.dart';
+import 'package:logging/logging.dart';
 import 'package:webdriver/sync_io.dart';
 
-void main(List<String> args) {
-  DriverAPI().main(args);
-}
-
-const String PLAYLIST_111 = 'spotify:playlist:2RFxTyHARNM8KDpZyamcsx';
-
-//const String FOLDER_GENERAL = 'spotify:start-group:20c77c3ea882ff4b:General';
-//const String FOLDER_FOLD1 = 'spotify:start-group:231be240b5401a01:fold';
-//const String FOLDER_FOLD2 = 'spotify:start-group:c5dd575d299c043a:fold';
-
-const SOME_FOLDER = '39b5c7b76cb5000';
-const INNER_PLAYLIST = '0RWiVsbFgo4sMYT4XK6fAM';
-const FIRST = 'b623551dee2c000';
-
 class DriverAPI {
+  final log = Logger('DriverAPI');
+
+  final File cookiesFile;
+  final File chromeDriverFile;
   WebDriver driver;
-  File cookiesFile = File('cookies.json');
 
   JSCommunication communication;
   RequestManager requestManager;
   PlaylistManager playlistManager;
 
+  DriverAPI(this.cookiesFile, this.chromeDriverFile);
+
   Future<void> startDriver() async {
     final runner = WebDriverRunner();
-    await runner.start();
-
-    print('Started driver!');
+    await runner.start(chromeDriverFile);
 
     driver = runner.driver;
 
@@ -46,42 +37,12 @@ class DriverAPI {
 
     await requestManager.initAuth();
 
-    playlistManager = await PlaylistManager.createPlaylistManager(driver, requestManager, communication);
-  }
-
-  Future<void> main(List<String> args) async {
-
-    print('Initialized everything!');
-
-//    var res = await playlistManager.movePlaylist(PLAYLIST_111, toGroup: FOLDER_GENERAL, offset: 1);
-
-//    var res = await playlistManager.createFolder('Alrighty', toGroup: FOLDER_FOLD1, offset: 1);
-
-
-//    var folder = await playlistManager.createFolder('Anothe router', absolutePosition: 0);
-//    var folderId = folder['id'];
-//    print('Made folder $folderId');
-//
-//    var playlist = await playlistManager.createPlaylist('Another inner');
-//    var playlistId = playlist['id'];
-//    print('Created playlist with ID of $playlistId');
-
-
-    const secondChild = '4bd03915143b8000';
-    const anotherRouter = '954932e2829000';
-    var moved = await playlistManager.movePlaylist(secondChild, toGroup: anotherRouter);
-
-    var base = await playlistManager.analyzeBaseRevision();
-    print('Base =');
-    print(base.elements.join('\n'));
-
-    print(moved);
-
-    print('Moved playlist');
+    playlistManager = await PlaylistManager.createPlaylistManager(
+        driver, requestManager, communication);
   }
 
   Future<void> getCredentials() async {
-    if (cookiesFile.existsSync()) {
+    if (await cookiesFile.exists()) {
       driver.get('https://open.spotify.com/');
       var json = jsonDecode(cookiesFile.readAsStringSync());
       json.forEach((cookie) => driver.cookies.add(Cookie.fromJson(cookie)));
@@ -93,12 +54,13 @@ class DriverAPI {
     driver.get(
         'https://accounts.spotify.com/en/login?continue=https:%2F%2Fopen.spotify.com%2F');
 
-    await getElement(driver, By.cssSelector('.Root__main-view'), duration: 20000);
+    await getElement(driver, By.cssSelector('.Root__main-view'),
+        duration: 20000);
 
-    print('Logged in!');
+    log.info('Logged in');
 
-    cookiesFile.writeAsStringSync(jsonEncode(
-        driver.cookies.all.map((cookie) => cookie.toJson()).toList()));
+    jsonEncode(driver.cookies.all.map((cookie) => cookie.toJson()).toList()) >>
+        cookiesFile;
   }
 
   Map<dynamic, dynamic> getLocalStorage() =>
@@ -109,37 +71,35 @@ class DriverAPI {
 }
 
 class WebDriverRunner {
+  final log = Logger('WebDriverRunner');
+
   Process _process;
 
   WebDriver _driver;
 
   WebDriver get driver => _driver;
 
-  Future<void> start(
-      [File chromedriver,
-      File spotify,
-      int chromeDriverPort = 4569,
-      int remoteDebuggingPort = 6978]) async {
-    chromedriver ??= File(r'E:\BRUHHHHH\chromedriver-79.exe');
-//    spotify ??= File(r'C:\Users\RubbaBoy\AppData\Roaming\Spotify\Spotify.exe');
+  Future<void> start(File chromedriver,
+      [int chromeDriverPort = 4569]) async {
+    if (await isOpen(chromeDriverPort)) {
+      log.info('Starting chromedriver...');
 
-//    _process = await Process.start(chromedriver.path, [
-//      '--port=$chromeDriverPort',
-//      '--url-base=wd/hub',
-//      '--enable-logging',
-//      '--verbose'
-//    ]);
-//
-//    await for (var out
-//        in const LineSplitter().bind(utf8.decoder.bind(_process.stdout))) {
-//      if (out.contains('Starting ChromeDriver')) {
-//        break;
-//      }
-//    }
+      _process = await Process.start(chromedriver.path, [
+        '--port=$chromeDriverPort',
+        '--url-base=wd/hub',
+      ]);
 
-//    print('Starting');
+      await for (var out
+      in const LineSplitter().bind(utf8.decoder.bind(_process.stdout))) {
+        if (out.contains('Starting ChromeDriver')) {
+          break;
+        }
+      }
 
-
+      log.info('Started chromedriver with PID $chromeDriverPort');
+    } else {
+      log.info('Looks like chromedriver is already running');
+    }
 
     _driver = await createDriver(
         uri: Uri.parse('http://localhost:${chromeDriverPort}/wd/hub/'),
@@ -190,11 +150,17 @@ class WebDriverRunner {
           },
         });
 
-    print('done');
+    log.info('Started driver');
   }
 
   void stop() {
     _driver.quit(closeSession: true);
     _process?.kill();
   }
+
+  Future<bool> isOpen(int port) =>
+      ServerSocket.bind('127.0.0.1', port).then((socket) {
+        socket.close();
+        return true;
+      }).catchError((_) => false);
 }

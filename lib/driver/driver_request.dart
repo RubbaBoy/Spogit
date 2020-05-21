@@ -21,6 +21,8 @@ class RequestManager {
   Future<void> initAuth() async {
     var authCompleter = Completer<String>();
 
+    var cancel = false;
+
     StreamSubscription sub;
     sub = _communication.stream.listen((message) async {
       print('Recieved socket data!');
@@ -31,7 +33,14 @@ class RequestManager {
         return;
       }
 
-      await sub?.cancel();
+      print('auth = $authorization');
+
+      if (cancel) {
+        return;
+      }
+
+//      await sub?.cancel();
+      cancel = true;
 
       authToken = authorization.substring(7);
 

@@ -12,7 +12,7 @@ class IdResource extends CachedResource<String> {
       : super(id, CacheType.ID, now, map['data']['name']);
 
   @override
-  Map pack() => {'name': data};
+  Map<String, dynamic> pack() => {'name': data};
 
   @override
   String toString() => 'IdResource{id = $id, name = $data}';

@@ -59,15 +59,12 @@ class PlaylistSimplified<T extends Jsonable> with Jsonable {
     snapshotId = json['snapshot_id'];
 
     if (isSubtype<T, Paging>()) {
-      print('json of tracks:\n${json['tracks']}');
       tracks = (json['tracks'] != null
           ? Paging<PlaylistTrack>.fromJson(
               json['tracks'], PlaylistTrack.jsonConverter)
           : null) as T;
     } else if (T == TracksObject) {
       tracks = TracksObject.fromJson(json['tracks']) as T;
-    } else {
-      print('Setting as else!!!!');
     }
 
     type = json['type'];

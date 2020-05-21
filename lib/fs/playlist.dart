@@ -39,7 +39,6 @@ class SpogitRoot extends SpotifyContainer {
         meta = [root, 'meta.json'].file..tryCreateSync(),
         coverImage = [root, 'cover.jpg'].file,
         readme = [root, 'README.md'].file {
-    print('MAKING ROOT!!!!! root dir is: ${root.path}');
     children;
     if (creating) {
       'local' >> [root, '.gitignore'];
@@ -179,7 +178,6 @@ class SpotifyPlaylist extends Mappable {
           ..createSync(recursive: true),
         super([parentDirectory, name].directory) {
     meta;
-    print('Playlist in ${parentDirectory.path}/$name');
   }
 
   List<SpotifySong> readSongs() {
@@ -206,9 +204,7 @@ class SpotifyPlaylist extends Mappable {
     }
 
     var currSongsHash = _songs?.customHash;
-    print('[$name] ($songsHash == 0 || $songsHash != $currSongsHash');
     if (songsHash == 0 || songsHash != currSongsHash) {
-      print('TRUE! Songs saving: ${songs.length}');
       songsHash = currSongsHash;
       await _songsFile.tryCreate();
 
