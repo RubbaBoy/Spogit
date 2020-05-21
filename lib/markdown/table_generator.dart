@@ -20,7 +20,7 @@ class TableGenerator extends MarkdownGenerator {
         Template.construct('${_rowString}\n', duplicateAppend: true);
 
     data.take(columns).forEach(rowTemplate.insertPlaceholder);
-    rowTemplate.appendString('$_divider');
+    rowTemplate.appendString('$_divider\n');
     data.skip(columns).forEach(rowTemplate.insertPlaceholder);
 
     return rowTemplate.build('<a/>');

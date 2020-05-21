@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:Spogit/cache/cache_manager.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
+import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
 import 'package:logging/logging.dart';
@@ -10,13 +12,15 @@ class ChangeWatcher {
   final log = Logger('ChangeWatcher');
 
   final DriverAPI driverAPI;
+  final int treeDuration;
+  final int playlistDuration;
   bool _lock = false;
   bool _nextUnlock = false;
 
   // The last etag for the playlist tree request
   String previousETag;
 
-  ChangeWatcher(this.driverAPI);
+  ChangeWatcher(this.driverAPI, {this.treeDuration = 2, this.playlistDuration = 2});
 
   void lock() {
     _lock = true;
@@ -30,7 +34,7 @@ class ChangeWatcher {
   /// Watches for changes in the playlist tree
   void watchAllChanges(Function(BaseRevision) callback) {
 
-    Timer.periodic(Duration(seconds: 2), (timer) async {
+    Timer.periodic(Duration(seconds: treeDuration), (timer) async {
       var etag = await driverAPI.playlistManager.baseRevisionETag();
 
       if (_lock) {
@@ -109,11 +113,16 @@ class ChangeWatcher {
 
   /// Watches for changes in any playlist tracks or meta. [callback] is invoked
   /// with a parsed playlist ID every time it is updated.
-  void watchPlaylistChanges(Function(Map<String, String>) callback) {
+  void watchPlaylistChanges(LocalManager localManager, Future<Map<SpogitRoot, Map<String, String>>> Function(Map<String, String>) callback) {
     // parsed playlist ID, snapshot
     final allSnapshots = <String, String>{};
-    Timer.periodic(Duration(seconds: 2), (timer) async {
-      var snapshots = await driverAPI.playlistManager.getPlaylistSnapshots();
+
+    for (var linked in localManager.linkedPlaylists) {
+      allSnapshots.addAll(trimStuff(linked.root.rootLocal.snapshotIds));
+    }
+
+    Timer.periodic(Duration(seconds: playlistDuration), (timer) async {
+      var snapshots = trimStuff(await driverAPI.playlistManager.getPlaylistSnapshots());
       if (allSnapshots.isEmpty) {
         allSnapshots.addAll(snapshots);
         return;
@@ -121,12 +130,21 @@ class ChangeWatcher {
 
       var diff = _getDifference(allSnapshots, snapshots);
       if (diff.isNotEmpty) {
-        callback(diff);
-        allSnapshots.clear();
+        await callback(diff).then((map) {
+          for (var root in map.keys) {
+            var local = root.rootLocal;
+            local.snapshotIds = {...local.snapshotIds, ...map[root]};
+            local.saveFile();
+          }
+        });
+
+//        allSnapshots.clear();
         allSnapshots.addAll(snapshots);
       }
     });
   }
+
+  Map<String, String> trimStuff(Map<String, String> map) => map.map((k, v) => MapEntry(k, v.substring(31)));
 
   Map<K, V> _getDifference<K, V>(Map<K, V> first, Map<K, V> second) {
     var res = <K, V>{};

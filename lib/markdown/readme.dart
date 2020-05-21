@@ -1,6 +1,6 @@
 
 final descriptionRegex = RegExp(r'\[start\-desc\]: #\s+(.*?)\s+\[end\-desc\]: #', dotAll: true);
-final linkRegex = RegExp(r'\[([^\\]*)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
+final linkRegex = RegExp(r'\[([^\\]*?)\]\(.*?spotify:track:([a-zA-Z0-9]{22})\)');
 
 class Readme {
   int titleLevel;
@@ -29,7 +29,7 @@ class Readme {
     var first = descriptionRegex.firstMatch(content);
 
     var description = first?.group(1);
-    var remaining = content.substring(contentStart, first?.end);
+    var remaining = content.substring(first?.end ?? 0);
 
     return Readme.createTitled(titleLevel: titleLevel, title: title, description: description, content: remaining);
   }

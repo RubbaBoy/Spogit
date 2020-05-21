@@ -450,7 +450,10 @@ class BaseRevision {
   int getTrackCountOf(String id) => getElement(id)?.length;
 
   int getHash({String id, RevisionElement element}) {
-    element ??= getElement(id);
+    if ((element ??= getElement(id)) == null) {
+      return 0;
+    }
+
     var totalHash = 0;
 
     void append(int number) {

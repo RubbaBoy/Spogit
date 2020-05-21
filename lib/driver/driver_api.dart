@@ -96,7 +96,7 @@ class WebDriverRunner {
         }
       }
 
-      log.info('Started chromedriver with PID $chromeDriverPort');
+      log.info('Started chromedriver with PID ${_process.pid}');
     } else {
       log.info('Looks like chromedriver is already running');
     }

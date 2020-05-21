@@ -21,11 +21,8 @@ class RequestManager {
   Future<void> initAuth() async {
     var authCompleter = Completer<String>();
 
-    var cancel = false;
-
     StreamSubscription sub;
     sub = _communication.stream.listen((message) async {
-      print('Recieved socket data!');
       var headers = access(message.value['1'], 'headers');
 
       var authorization = access(headers, 'authorization');
@@ -33,14 +30,7 @@ class RequestManager {
         return;
       }
 
-      print('auth = $authorization');
-
-      if (cancel) {
-        return;
-      }
-
-//      await sub?.cancel();
-      cancel = true;
+      await sub?.cancel();
 
       authToken = authorization.substring(7);
 
@@ -49,8 +39,6 @@ class RequestManager {
               uri: Uri.parse('https://api.spotify.com/v1/me'),
               token: authToken)
           .send();
-
-      print(meResponse.json);
 
       personalData = PersonalData.fromJson(meResponse.json);
 
@@ -64,6 +52,7 @@ constantMock = window.fetch;
 window.fetch = function() {
         if (arguments[0].includes('spotify.com')) {
             authSocket.send(JSON.stringify({'type': 'http', 'value': arguments}));
+            window.fetch = constantMock;
         }
     return constantMock.apply(this, arguments)
 }

@@ -67,6 +67,10 @@ File dynamicFile(dynamic file) {
   }
 }
 
+String escapeSlash(String input) => input.replaceAll('/', ' ∕ ');
+
+String unescapeSlash(String input) => input.replaceAll(' ∕ ', '/');
+
 /// Checks whether [T1] is a (not necessarily proper) subtype of [T2].
 /// <br><br>Author: [Irn](https://stackoverflow.com/a/50198267/3929546)
 bool isSubtype<T1, T2>() => <T1>[] is List<T2>;
@@ -90,7 +94,7 @@ Map<String, dynamic> tryJsonDecode(String json,
 extension StringUtils on String {
   static final QUOTES_REGEX = RegExp('[^\\s"\']+|"([^"]*)"|\'([^\']*)\'');
 
-  int parseInt() => int.parse(this);
+  int parseInt() => int.tryParse(this);
 
   double parseDouble() => double.parse(this);
 
@@ -167,6 +171,7 @@ extension PathUtils on List<dynamic> {
   String get separatorFix =>
       map((e) => (e is File || e is Directory ? e.path : e) as String)
           .where((str) => str.isNotEmpty)
+          .map(escapeSlash)
           .join(separator);
 
   File get file => File(separatorFix);

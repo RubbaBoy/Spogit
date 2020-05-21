@@ -58,9 +58,9 @@ class SpogitRoot extends SpotifyContainer {
           .map((dir) {
         var name = dir.uri.realName;
         if (dir.isPlaylist) {
-          return SpotifyPlaylist(spogit, name, dir.parent, parent);
+          return SpotifyPlaylist(spogit, unescapeSlash(name), dir.parent, parent);
         } else {
-          final folder = SpotifyFolder(name, dir.parent, parent);
+          final folder = SpotifyFolder(unescapeSlash(name), dir.parent, parent);
           folder.children = _traverseDir(dir, folder);
           return folder;
         }
@@ -105,22 +105,31 @@ class RootLocal extends LocalStorage {
   /// The randomized, local ID used to identify this.
   String get id => _id ??= this['id'];
 
-  set id(String value) => this['id'] = value;
+  set id(String value) => _id = this['id'] = value;
 
   List<String> _tracking;
 
   /// The IDs of the things that are being tracked.
-  List<String> get tracking =>
-      _tracking ??= List<String>.from(this['tracking']);
+  List<String> get tracking => _tracking ??=
+      List<String>.from(this['tracking'] ?? const [], growable: false);
 
-  set tracking(List<String> value) => this['tracking'] = value;
+  set tracking(List<String> value) => _tracking = this['tracking'] = value;
+
+  Map<String, String> _snapshotIds;
+
+  /// A map of the playlist IDs and their snapshots, used for change tracking.
+  Map<String, String> get snapshotIds =>
+      _snapshotIds ??= Map.unmodifiable(this['snapshotIds'] ?? const {});
+
+  set snapshotIds(Map<String, String> value) =>
+      _snapshotIds = this['snapshotIds'] = value;
 
   String _revision;
 
   /// The ETag of the last base revision used.
   String get revision => _revision ??= this['revision'];
 
-  set revision(String value) => this['revision'] = value;
+  set revision(String value) => _revision = this['revision'] = value;
 }
 
 class SpotifyPlaylist extends Mappable {
@@ -183,7 +192,7 @@ class SpotifyPlaylist extends Mappable {
   List<SpotifySong> readSongs() {
     var read = Readme.parse(_songsFile.tryReadSync());
     return read.content
-        .split(RegExp(r'^$', multiLine: true))
+        .split('---')
         .where((line) => line.trim().isNotEmpty)
         .map((line) => SpotifySong.fromLine(_spogit, line))
         .notNull()
@@ -306,7 +315,11 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
 }
 
 class SpotifySong {
+  /// The parsed track ID
   final String id;
+
+  /// The track name
+  final String trackName;
 
   /// The ID of the album
   String albumId;
@@ -324,27 +337,18 @@ class SpotifySong {
   Spogit spogit;
   String cachedLine;
 
-//  /// If defined, [toLine] will output this. This comes directly from the
-//  /// markdown.
-//  String artistCode;
-
-//  /// Creates a SpotifySong from individual pieces. The [id] should be a parsed
-//  /// track ID.
-//  SpotifySong(this.id, String artistName, String songName)
-//      : artistLine = '$songName - $artistName' {
-//    print('Artistline = $artistLine');
-//  }
-
   /// Creates a SpotifySong from a single track json element.
   SpotifySong.fromJson(this.spogit, PlaylistTrack playlistTrack)
       : id = playlistTrack.track.id,
+        trackName = playlistTrack.track.name,
         _album = playlistTrack.track.album {
     albumId = _album.id;
   }
 
   /// The [id] should be the parsed track ID, and the [artistName] is the full
   /// `Song - Artist` unparsed line from an existing link.
-  SpotifySong._create(this.spogit, this.id, this.albumId, [this.cachedLine]);
+  SpotifySong._create(this.spogit, this.trackName, this.id, this.albumId,
+      [this.cachedLine]);
 
   /// Example of a song chunk:
   /// ```
@@ -354,20 +358,22 @@ class SpotifySong {
   /// ---
   /// ```
   factory SpotifySong.fromLine(Spogit spogit, String songChunk) {
-    var matches = linkRegex.allMatches(songChunk);
-    if (matches.isEmpty) {
+    var allMatches = linkRegex.allMatches(songChunk);
+    var matches = allMatches.iterator;
+    if (allMatches.length != 2) {
       return null;
     }
 
-    print('Creating from $songChunk');
+    matches.moveNext();
+    var trackMatch = matches.current;
+    matches.moveNext();
+    var albumMatch = matches.current;
 
-    var match = matches.first;
-    return SpotifySong._create(
-        spogit, match.group(2), match.group(1), songChunk.trim());
+    return SpotifySong._create(spogit, trackMatch.group(1), trackMatch.group(2),
+        albumMatch.group(2), songChunk.trim());
   }
 
-  FutureOr<String> toLine() async => cachedLine ??= await (() async {
-        // add-remote "TestLocal" spotify:playlist:4C2CEMy00xKSzV0Xe5Ipww 885053d3775d000
+  FutureOr<String> toLine() async => await (() async {
         var fetchedAlbum = await album;
         return '''
 <img align="left" width="100" height="100" src="${fetchedAlbum.images[0].url}">
@@ -378,9 +384,6 @@ class SpotifySong {
 ---
 ''';
       })();
-
-//  FutureOr<String> toLine() =>
-//      '[$artistCode](https://open.spotify.com/go?uri=spotify:track:$id)';
 
   @override
   bool operator ==(Object other) =>

@@ -59,6 +59,15 @@ list
           var ids =
               args.skip(1).map((str) => ParsingUtils(str).parseId).toList();
 
+          var base = await driverAPI.playlistManager.analyzeBaseRevision();
+          var baseIds = base.elements.map((elem) => elem.id.parseId).toSet();
+          ids.removeWhere((id) => !baseIds.contains(id));
+
+          if (ids.isEmpty) {
+            print('Could not perform that action as no IDs were top-level.');
+            break;
+          }
+
           var local = LinkedPlaylist.fromRemote(spogit, localManager, name,
               await driverAPI.playlistManager.analyzeBaseRevision(), ids);
           localManager.addPlaylist(local);
@@ -84,8 +93,9 @@ E - Group end. ID starts with spotify:end-group
           var depth = 0;
           var nameMap = <String, String>{};
           for (var element in base.elements) {
-            String line(String type, [String name]) => '${'  ' * depth} [$type] ${name ?? element.name} #${element.id}';
-            switch(element.type) {
+            String line(String type, [String name]) =>
+                '${'  ' * depth} [$type] ${name ?? element.name} #${element.id}';
+            switch (element.type) {
               case ElementType.Playlist:
                 print(line('P'));
                 break;
@@ -100,6 +110,20 @@ E - Group end. ID starts with spotify:end-group
                 break;
             }
           }
+          break;
+        case 'save':
+          print('Saving data from memory...');
+
+          if (args.isEmpty) {
+            print('Please provide a list of IDs to pull.');
+            break;
+          }
+
+          for (var id in args) {
+            var pulling = localManager.getFromAnyId(id);
+            await pulling.initElement();
+          }
+
           break;
         default:
           print('Couldn\'t recognise command "$command"');

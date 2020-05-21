@@ -32,7 +32,7 @@ class Spogit {
   Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager,
       this.idResourceManager, this.albumResourceManager);
 
-  static Future<Spogit> createSpogit(File cookiesFile, File chromedriverFile, File cacheFile) async {
+  static Future<Spogit> createSpogit(File cookiesFile, File chromedriverFile, File cacheFile, {int treeDuration = 2, int playlistDuration = 2}) async {
     final cacheManager = CacheManager(cacheFile)
       ..registerType(CacheType.PLAYLIST_COVER,
           (id, map) => PlaylistCoverResource.fromPacked(id, map))
@@ -43,7 +43,7 @@ class Spogit {
     final driverAPI = DriverAPI(cookiesFile, chromedriverFile);
     await driverAPI.startDriver();
 
-    final changeWatcher = ChangeWatcher(driverAPI);
+    final changeWatcher = ChangeWatcher(driverAPI, treeDuration: treeDuration, playlistDuration: playlistDuration);
     final gitHook = GitHook();
 
     final idResourceManager =
@@ -74,7 +74,6 @@ class Spogit {
               LinkedPlaylist.fromLocal(this, manager, normalizeDir(wd).directory);
           manager.addPlaylist(linked);
           var tracking = await linked.initLocal();
-          print('tracking: $tracking');
           await linked.root.save();
 
           Timer(Duration(seconds: 2), () => changeWatcher.unlock());
@@ -98,13 +97,16 @@ class Spogit {
         (baseRevision, linkedPlaylist, ids) => linkedPlaylist.pullRemote(baseRevision, ids));
 
     log.info('Watching for playlist changes...');
-    changeWatcher.watchPlaylistChanges((changed) async {
+    changeWatcher.watchPlaylistChanges(manager, (changed) async {
+      var res = <SpogitRoot, Map<String, String>>{};
       for (var id in changed.keys) {
         bruh:
         for (var exist in existing) {
           var searched = exist.root.searchForId(id) as SpotifyPlaylist;
           if (searched != null) {
             var playlistDetails = await playlistManager.getPlaylistInfo(id);
+
+            res.putIfAbsent(exist.root, () => <String, String>{})[id] = changed[id];
 
             searched
               ..description = playlistDetails.description
@@ -119,7 +121,8 @@ class Spogit {
         }
       }
 
-      log.info('Updated change stuff');
+      log.info('Updated change stuff: ${changed}');
+      return res;
     });
 
     inputController.start();

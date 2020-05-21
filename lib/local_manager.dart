@@ -60,6 +60,10 @@ class LocalManager {
     return linkedPlaylists;
   }
 
+  /// Gets the LinkedPlaylist from any [id] it contains.
+  LinkedPlaylist getFromAnyId(String name) =>
+      linkedPlaylists.firstWhere((linked) => linked.root.root.uri.realName == name, orElse: () => null);
+
   void addPlaylist(LinkedPlaylist linkedPlaylist) =>
       linkedPlaylists.add(linkedPlaylist);
 
