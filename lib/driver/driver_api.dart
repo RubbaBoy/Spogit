@@ -6,6 +6,7 @@ import 'package:Spogit/driver/driver_request.dart';
 import 'package:Spogit/driver/js_communication.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/driver_utility.dart';
+import 'package:Spogit/setup.dart';
 import 'package:Spogit/utility.dart';
 import 'package:logging/logging.dart';
 import 'package:webdriver/sync_io.dart';
@@ -23,7 +24,7 @@ class DriverAPI {
 
   DriverAPI(this.cookiesFile, this.chromeDriverFile);
 
-  Future<void> startDriver() async {
+  Future<void> startDriver(Function() setup) async {
     final runner = WebDriverRunner();
     await runner.start(chromeDriverFile);
 
@@ -33,7 +34,7 @@ class DriverAPI {
 
     requestManager = RequestManager(driver, communication);
 
-    await getCredentials();
+    await getCredentials(setup);
 
     await requestManager.initAuth();
 
@@ -41,7 +42,7 @@ class DriverAPI {
         driver, requestManager, communication);
   }
 
-  Future<void> getCredentials() async {
+  Future<void> getCredentials(Function() setup) async {
     if (await cookiesFile.exists()) {
       driver.get('https://open.spotify.com/');
       var json = jsonDecode(cookiesFile.readAsStringSync());
@@ -49,13 +50,15 @@ class DriverAPI {
 
       driver.get('https://open.spotify.com/');
       return;
+    } else {
+      setup();
     }
 
     driver.get(
         'https://accounts.spotify.com/en/login?continue=https:%2F%2Fopen.spotify.com%2F');
 
     await getElement(driver, By.cssSelector('.Root__main-view'),
-        duration: 20000);
+        duration: 60000);
 
     log.info('Logged in');
 

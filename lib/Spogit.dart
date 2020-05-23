@@ -14,6 +14,7 @@ import 'package:Spogit/fs/playlist.dart';
 import 'package:Spogit/git_hook.dart';
 import 'package:Spogit/input_controller.dart';
 import 'package:Spogit/local_manager.dart';
+import 'package:Spogit/setup.dart';
 import 'package:Spogit/utility.dart';
 import 'package:logging/logging.dart';
 
@@ -41,7 +42,7 @@ class Spogit {
     cacheManager.scheduleWrites();
 
     final driverAPI = DriverAPI(cookiesFile, chromedriverFile);
-    await driverAPI.startDriver();
+    await driverAPI.startDriver(() => Setup().setup(cacheFile.parent));
 
     final changeWatcher = ChangeWatcher(driverAPI, treeDuration: treeDuration, playlistDuration: playlistDuration);
     final gitHook = GitHook();
