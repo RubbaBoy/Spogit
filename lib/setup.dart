@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:Spogit/utility.dart';
 import 'package:logging/logging.dart';
 
-void main(List<String> args) {
-    Setup().setup(r'C:\Users\RubbaBoy\Spogit'.directory);
+Future<void> main(List<String> args) async {
+    await Setup().setup();
 }
 
 class Setup {
@@ -24,18 +24,66 @@ fi
   };
 
   /// Should only be invoked once, such as when logging in.
-  /// Takes the ~/Spogit directory and places got hooks in there, and then runs
-  /// a git config command to set the hooks to that location.
-  Future<void> setup(Directory spogit) async {
+  /// Adds relevant hooks to the default git repo template
+  Future<void> setup() async {
     log.info('Creating and setting hooks...');
-    var hooksDir = [spogit, 'hooks'].directory;
+    var templateDir = await getTemplateDirectory();
+    var hooksDir = [templateDir, 'hooks'].directory;
     await hooksDir.create(recursive: true);
 
     for (var name in hooks.keys) {
-      hooks[name] >> [hooksDir, name];
+      var outFile = [hooksDir, name].file;
+      if (!(await outFile.exists())) {
+        try {
+          await outFile.create();
+          hooks[name] >> outFile;
+          log.info('Added $name hook');
+        } on FileSystemException catch (e, s) {
+          log.severe('Unable to create hook', e, s);
+          print(e);
+        }
+      } else {
+        log.info('"${outFile.path}" already exists, not adding hook.');
+      }
     }
 
-    await Process.run(
-        'git', ['config', '--global', 'core.hooksPath', hooksDir.path]);
+    log.info('Created hooks');
   }
+
+  Future<Directory> getTemplateDirectory() async {
+    var info = (await gitCommand('--info-path')).directory.parent;
+    var man = (await gitCommand('--man-path')).directory.parent;
+    var html = (await gitCommand('--html-path')).directory.parent.parent;
+
+    var share = getSimilarity([info, man, html]) ?? info;
+    return [share, 'git-core', 'templates'].directory;
+  }
+
+  T getSimilarity<T>(List<T> data, [int minEquals = 2]) {
+    var equalsData = <List<T>>[];
+
+    for (var i = 0; i < data.length; i++) {
+      var outer = data[i];
+      var thisEquals = <T>[];
+      for (var j = 0; j < data.length; j++) {
+        if (j != i && data[j] == outer) {
+          thisEquals.add(data[j]);
+        }
+      }
+
+      if (thisEquals.length >= minEquals) {
+        equalsData.add(thisEquals);
+      }
+    }
+
+    if (equalsData.isEmpty) {
+      return null;
+    }
+
+    equalsData.sort((list1, list2) => list2.length.compareTo(list1.length));
+    return equalsData.safeFirst?.first;
+  }
+
+
+  Future<String> gitCommand(String command) async => (await Process.run('git', [command])).stdout;
 }

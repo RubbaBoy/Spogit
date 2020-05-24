@@ -42,7 +42,7 @@ class Spogit {
     cacheManager.scheduleWrites();
 
     final driverAPI = DriverAPI(cookiesFile, chromedriverFile);
-    await driverAPI.startDriver(() => Setup().setup(cacheFile.parent));
+    await driverAPI.startDriver();
 
     final changeWatcher = ChangeWatcher(driverAPI, treeDuration: treeDuration, playlistDuration: playlistDuration);
     final gitHook = GitHook();

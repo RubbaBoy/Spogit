@@ -24,7 +24,7 @@ class DriverAPI {
 
   DriverAPI(this.cookiesFile, this.chromeDriverFile);
 
-  Future<void> startDriver(Function() setup) async {
+  Future<void> startDriver() async {
     final runner = WebDriverRunner();
     await runner.start(chromeDriverFile);
 
@@ -34,7 +34,7 @@ class DriverAPI {
 
     requestManager = RequestManager(driver, communication);
 
-    await getCredentials(setup);
+    await getCredentials();
 
     await requestManager.initAuth();
 
@@ -42,7 +42,7 @@ class DriverAPI {
         driver, requestManager, communication);
   }
 
-  Future<void> getCredentials(Function() setup) async {
+  Future<void> getCredentials() async {
     if (await cookiesFile.exists()) {
       driver.get('https://open.spotify.com/');
       var json = jsonDecode(cookiesFile.readAsStringSync());
@@ -51,7 +51,7 @@ class DriverAPI {
       driver.get('https://open.spotify.com/');
       return;
     } else {
-      setup();
+      Setup().setup();
     }
 
     driver.get(
