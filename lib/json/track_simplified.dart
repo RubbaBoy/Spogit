@@ -32,7 +32,7 @@ class TrackSimplified with Jsonable {
         this.type,
         this.uri});
 
-  static TrackSimplified jsonConverter(Map<String, dynamic> json) => TrackSimplified.fromJson(json);
+  static TrackSimplified jsonConverter(Map<String, dynamic> json) => json == null ? null : TrackSimplified.fromJson(json);
 
   TrackSimplified.fromJson(Map<String, dynamic> json) {
     if (json['artists'] != null) {

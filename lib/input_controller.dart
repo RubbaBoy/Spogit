@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:Spogit/Spogit.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
+import 'package:Spogit/git_hook.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
 
@@ -15,7 +16,7 @@ class InputController {
   InputController(this.spogit, this.localManager)
       : driverAPI = spogit.driverAPI;
 
-  void start() {
+  void start(Directory path) {
     print('Listening for commands...');
     stdin.transform(utf8.decoder).listen((line) async {
       var split = line.splitQuotes();
@@ -72,6 +73,17 @@ list
               await driverAPI.playlistManager.analyzeBaseRevision(), ids);
           localManager.addPlaylist(local);
           await local.initElement();
+          break;
+        case 'al':
+        case 'add-local':
+          if (args.length != 1) {
+            print('The arguments must be a single directory name as the Spogit child');
+            break;
+          }
+
+          var addingPath = [path, args[0]].directory;
+          print('Adding local repository ${addingPath.path}');
+          spogit.gitHook.postCheckout.add(PostCheckoutData('', '', false, addingPath));
           break;
         case 'status':
           for (var value in localManager.linkedPlaylists) {

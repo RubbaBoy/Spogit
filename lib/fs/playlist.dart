@@ -331,7 +331,7 @@ class SpotifySong {
   FutureOr<AlbumSimplified> get album =>
       _album ??
       spogit.albumResourceManager
-          .getAlbum(albumId)
+          .getAlbumFromId(albumId)
           .then((full) => _album = full);
 
   Spogit spogit;

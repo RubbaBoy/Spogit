@@ -38,7 +38,9 @@ class PlaylistManager {
               method: RequestMethod.Get,
               token: _requestManager.authToken,
               uri: Uri.parse('$apiUrl/playlists'))
-          .sendPaging((map) => PlaylistSimplified.jsonConverter<TracksObject>(map), all: true)
+          .sendPaging(
+              (map) => PlaylistSimplified.jsonConverter<TracksObject>(map),
+              all: true)
           .then((response) {
         var res = <String, String>{};
         for (var item in response) {
@@ -87,12 +89,22 @@ class PlaylistManager {
   /// returned as a response.
   Future<Map<String, dynamic>> basedRequest(
       FutureOr<Response> Function(BaseRevision) makeRequest,
-      [bool useBase = true]) async {
+      {bool useBase = true,
+      bool throwOnError = true}) async {
     var response =
         await makeRequest(useBase ? await analyzeBaseRevision() : null);
 
     if (response.statusCode >= 300) {
-      throw 'Status ${response.statusCode}: ${response.body}';
+      if (!throwOnError) {
+        return null;
+      }
+
+      try {
+        throw 'Status ${response.statusCode}: ${response.body}';
+      } catch (e, s) {
+        log.severe('Bruh moment', e, s);
+        return null;
+      }
     }
 
     return response.json;
@@ -108,7 +120,7 @@ class PlaylistManager {
                       .replace(queryParameters: {'id': id}),
                   token: _requestManager.authToken)
               .send(),
-          false)
+          useBase: false)
       .then((json) => AlbumFull.fromJson(json));
 
   /// Gets an album's tracks by its ID. If [all] is true, it will get all
@@ -254,21 +266,25 @@ class PlaylistManager {
                 'description': description,
               },
             ).send(),
-        false);
+        useBase: false);
   }
 
   /// Gets a playlist by its [id].
   /// <br><br>See [Get a Playlist](https://developer.spotify.com/documentation/web-api/reference/playlists/get-playlist/)
-  Future<PlaylistFull> getPlaylistInfo(String id) {
-    return DriverRequest(
-      method: RequestMethod.Get,
-      uri: Uri.parse('$apiBase/playlists/${id.parseId}')
-          .replace(queryParameters: {
-        'type': 'track,episode',
-        'market': 'from_token',
-      }),
-      token: _requestManager.authToken,
-    ).send().then((res) => PlaylistFull.fromJson(res.json));
+  Future<PlaylistFull> getPlaylistInfo(String id, {bool throwOnError = true}) {
+    return basedRequest(
+            (_) => DriverRequest(
+                  method: RequestMethod.Get,
+                  uri: Uri.parse('$apiBase/playlists/${id.parseId}')
+                      .replace(queryParameters: {
+                    'type': 'track,episode',
+                    'market': 'from_token',
+                  }),
+                  token: _requestManager.authToken,
+                ).send(),
+            useBase: false,
+            throwOnError: throwOnError)
+        .then(PlaylistFull.jsonConverter);
   }
 
   /// Removes tracks from the given [playlist] ID. [trackIds] should contain a
@@ -333,32 +349,37 @@ class PlaylistManager {
               },
               body: base64Encode(await file.readAsBytes()),
             ).send(),
-        false);
+        useBase: false);
   }
 
   /// Gets information on a single track by its [id].
   /// <br><br>See [Get a Track](https://developer.spotify.com/documentation/web-api/reference/tracks/get-track/)
-  Future<TrackFull> getTrack(String id) => basedRequest(
-          (_) => DriverRequest(
-                method: RequestMethod.Get,
-                uri: Uri.parse('$apiBase/tracks/${id.parseId}'),
-                token: _requestManager.authToken,
-              ).send(),
-          false)
-      .then(TrackFull.jsonConverter);
+  Future<TrackFull> getTrack(String id, {bool throwOnError = true}) =>
+      basedRequest(
+              (_) => DriverRequest(
+                    method: RequestMethod.Get,
+                    uri: Uri.parse('$apiBase/tracks/${id.parseId}'),
+                    token: _requestManager.authToken,
+                  ).send(),
+              useBase: false,
+              throwOnError: throwOnError)
+          .then(TrackFull.jsonConverter);
 
   /// Gets information on multiple tracks by their [ids].
   /// <br><br>See [Get Several Tracks](https://developer.spotify.com/documentation/web-api/reference/tracks/get-several-tracks/)
-  Future<List<TrackFull>> getTracks(List<String> ids) => basedRequest(
-          (_) => DriverRequest(
-                  method: RequestMethod.Get,
-                  uri: Uri.parse('$apiBase/tracks'),
-                  token: _requestManager.authToken,
-                  body: {
-                    'ids': ids.map((id) => id.parseId).join(','),
-                  }).send(),
-          false)
-      .then((json) => json['tracks'].map(TrackFull.jsonConverter).toList());
+  Future<List<TrackFull>> getTracks(List<String> ids,
+          {bool throwOnError = true}) =>
+      basedRequest(
+              (_) => DriverRequest(
+                      method: RequestMethod.Get,
+                      uri: Uri.parse('$apiBase/tracks'),
+                      token: _requestManager.authToken,
+                      body: {
+                        'ids': ids.map((id) => id.parseId).join(','),
+                      }).send(),
+              useBase: false,
+              throwOnError: throwOnError)
+          .then((json) => json['tracks'].map(TrackFull.jsonConverter).toList());
 }
 
 /// A flat, direct representation of the fetched base revision

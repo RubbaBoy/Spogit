@@ -41,7 +41,7 @@ class PlaylistFull extends PlaylistSimplified<Paging<PlaylistTrack>> with Jsonab
         );
 
   static PlaylistFull jsonConverter(Map<String, dynamic> json) =>
-      PlaylistFull.fromJson(json);
+      json == null ? null : PlaylistFull.fromJson(json);
 
   PlaylistFull.fromJson(Map<String, dynamic> json)
       : description = json['description'],
@@ -87,7 +87,7 @@ class PlaylistTrack with Jsonable {
   PlaylistTrack({this.addedAt, this.addedBy, this.isLocal, this.track});
 
   static PlaylistTrack jsonConverter(Map<String, dynamic> json) =>
-      PlaylistTrack.fromJson(json);
+      json == null ? null : PlaylistTrack.fromJson(json);
 
   PlaylistTrack.fromJson(Map<String, dynamic> json) {
     addedAt = json['added_at'];

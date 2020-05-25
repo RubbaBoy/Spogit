@@ -50,10 +50,10 @@ class IdResourceManager {
   FutureOr<String> tryRequest(String id, ResourceType resource) {
     switch (resource) {
       case ResourceType.Track:
-        return playlistManager.getTrack(id).then((json) => json.name);
+        return playlistManager.getTrack(id).then((json) => json?.name);
         break;
       case ResourceType.Playlist:
-        return playlistManager.getPlaylistInfo(id).then((json) => json.name);
+        return playlistManager.getPlaylistInfo(id).then((json) => json?.name);
       case ResourceType.Folder:
         return id.startsWith('spotify:start-group') ? id.replaceFirst('spotify:start-group:', '').safeSubstring(22)?.replaceAll('+', '') : null;
     }

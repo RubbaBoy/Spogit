@@ -42,14 +42,14 @@ class TrackFull with Jsonable {
         this.type,
         this.uri});
 
-  static TrackFull jsonConverter(Map<String, dynamic> json) => TrackFull.fromJson(json);
+  static TrackFull jsonConverter(Map<String, dynamic> json) => json == null ? null : TrackFull.fromJson(json);
 
   TrackFull.fromJson(Map<String, dynamic> json) {
-    album = json['album'] != null ? new AlbumSimplified.fromJson(json['album']) : null;
+    album = json['album'] != null ? AlbumSimplified.fromJson(json['album']) : null;
     if (json['artists'] != null) {
-      artists = new List<Artists>();
+      artists = <Artists>[];
       json['artists'].forEach((v) {
-        artists.add(new Artists.fromJson(v));
+        artists.add(Artists.fromJson(v));
       });
     }
     availableMarkets = json['available_markets']?.cast<String>();
@@ -57,10 +57,10 @@ class TrackFull with Jsonable {
     durationMs = json['duration_ms'];
     explicit = json['explicit'];
     externalIds = json['external_ids'] != null
-        ? new ExternalIds.fromJson(ExternalType.ISRC, json['external_ids'])
+        ? ExternalIds.fromJson(ExternalType.ISRC, json['external_ids'])
         : null;
     externalUrls = json['external_urls'] != null
-        ? new ExternalUrls.fromJson(json['external_urls'])
+        ? ExternalUrls.fromJson(json['external_urls'])
         : null;
     href = json['href'];
     id = json['id'];

@@ -58,7 +58,7 @@ class DriverAPI {
         'https://accounts.spotify.com/en/login?continue=https:%2F%2Fopen.spotify.com%2F');
 
     await getElement(driver, By.cssSelector('.Root__main-view'),
-        duration: 60000);
+        duration: 60000, checkInterval: 1000);
 
     log.info('Logged in');
 

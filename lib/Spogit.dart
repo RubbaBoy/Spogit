@@ -34,6 +34,8 @@ class Spogit {
       this.idResourceManager, this.albumResourceManager);
 
   static Future<Spogit> createSpogit(File cookiesFile, File chromedriverFile, File cacheFile, {int treeDuration = 2, int playlistDuration = 2}) async {
+    await [cacheFile.parent, '.spogit'].file.create(recursive: true);
+
     final cacheManager = CacheManager(cacheFile)
       ..registerType(CacheType.PLAYLIST_COVER,
           (id, map) => PlaylistCoverResource.fromPacked(id, map))
@@ -74,7 +76,7 @@ class Spogit {
           var linked =
               LinkedPlaylist.fromLocal(this, manager, normalizeDir(wd).directory);
           manager.addPlaylist(linked);
-          var tracking = await linked.initLocal();
+          await linked.initLocal();
           await linked.root.save();
 
           Timer(Duration(seconds: 2), () => changeWatcher.unlock());
@@ -126,7 +128,7 @@ class Spogit {
       return res;
     });
 
-    inputController.start();
+    inputController.start(path);
   }
 
   bool directoryEquals(Directory one, Directory two) =>
