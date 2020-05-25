@@ -4,7 +4,7 @@ import 'package:Spogit/utility.dart';
 import 'package:logging/logging.dart';
 
 Future<void> main(List<String> args) async {
-    await Setup().setup();
+  await Setup().setup();
 }
 
 class Setup {
@@ -27,27 +27,28 @@ fi
   /// Adds relevant hooks to the default git repo template
   Future<void> setup() async {
     log.info('Creating and setting hooks...');
-    var templateDir = await getTemplateDirectory();
-    var hooksDir = [templateDir, 'hooks'].directory;
-    await hooksDir.create(recursive: true);
+    try {
+      var templateDir = await getTemplateDirectory();
+      var hooksDir = [templateDir, 'hooks'].directory;
 
-    for (var name in hooks.keys) {
-      var outFile = [hooksDir, name].file;
-      if (!(await outFile.exists())) {
-        try {
+      await hooksDir.create(recursive: true);
+
+      for (var name in hooks.keys) {
+        var outFile = [hooksDir, name].file;
+        if (!(await outFile.exists())) {
           await outFile.create();
           hooks[name] >> outFile;
           log.info('Added $name hook');
-        } on FileSystemException catch (e, s) {
-          log.severe('Unable to create hook', e, s);
-          print(e);
+        } else {
+          log.info('"${outFile.path}" already exists, not adding hook.');
         }
-      } else {
-        log.info('"${outFile.path}" already exists, not adding hook.');
       }
-    }
 
-    log.info('Created hooks');
+      log.info('Created hooks');
+    } on FileSystemException catch (e, s) {
+      log.severe('Unable to create hook', e, s);
+      print(e);
+    }
   }
 
   Future<Directory> getTemplateDirectory() async {
@@ -84,6 +85,6 @@ fi
     return equalsData.safeFirst?.first;
   }
 
-
-  Future<String> gitCommand(String command) async => (await Process.run('git', [command])).stdout;
+  Future<String> gitCommand(String command) async =>
+      (await Process.run('git', [command])).stdout;
 }

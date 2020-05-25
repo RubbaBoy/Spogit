@@ -51,7 +51,7 @@ class DriverAPI {
       driver.get('https://open.spotify.com/');
       return;
     } else {
-      Setup().setup();
+      await Setup().setup();
     }
 
     driver.get(
