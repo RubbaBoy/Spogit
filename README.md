@@ -31,6 +31,9 @@ list
 
 add-remote "My Demo" spotify:playlist:41fMgMIEZJLJjJ9xbzYar6 27345c6f477d000
     Adds a list of playlist or folder IDs to the local Spogit root with the given name.
+    
+add-local "My Demo"
+	Adds a local directory in the Spogit root to your Spotify account and begin tracking. Useful if git hooks are not working.
 
 ===
 ```
@@ -97,6 +100,18 @@ add-remote "My Demo" spotify:playlist:41fMgMIEZJLJjJ9xbzYar6 27345c6f477d000
 ```
 
 After doing this, any modification to the playlists over Spotify will modify the local copy as well, as long as the program is running.
+
+### Adding A Local Repo
+
+If your Git hooks are not functioning properly and a repo is not auto-added when it is clones, or it is created/clones when Spogit is not running, `add-local` may be used. It accepts a single argument of the directory name in the Spogit root to add to your account from and start tracking.
+
+An example command adding the `~/Spogit/Music` cloned playlist to your Spotify account:
+
+```
+add-local "Music"
+```
+
+
 
 ## Cloning From A Git Repository
 

@@ -30,15 +30,18 @@ class InputController {
         case '?':
           print('''
 === Command help ===
-
-add-remote "My Demo" spotify:playlist:41fMgMIEZJLJjJ9xbzYar6 27345c6f477d000
-    Adds a list of playlist or folder IDs to the local Spogit root with the given name.
   
 status
     Lists the linked repos and playlists
   
 list
     Lists your Spotify accounts' playlist and folder names and IDs.
+
+add-remote "My Demo" spotify:playlist:41fMgMIEZJLJjJ9xbzYar6 27345c6f477d000
+    Adds a list of playlist or folder IDs to the local Spogit root with the given name.
+
+add-local "My Demo"
+	Adds a local directory in the Spogit root to your Spotify account and begin tracking. Useful if git hooks are not working.
 
 ===''');
           break;
@@ -78,6 +81,8 @@ list
         case 'add-local':
           if (args.length != 1) {
             print('The arguments must be a single directory name as the Spogit child');
+            print('Example usage:');
+            print('\tadd-local "My Demo"');
             break;
           }
 

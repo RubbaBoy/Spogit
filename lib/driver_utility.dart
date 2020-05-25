@@ -1,17 +1,18 @@
 import 'dart:io';
 
 import 'package:webdriver/sync_io.dart';
+import 'package:Spogit/utility.dart';
 
 Future<WebElement> getElement(WebDriver driver, By by,
     {int duration = 5000, int checkInterval = 100}) async {
-  var element;
+  var elements = <WebElement>[];
   do {
     try {
-      element = await driver.findElement(by);
-      if (element != null) return element;
+      elements = await driver.findElements(by);
+      if (elements.isNotEmpty) return elements.first;
     } catch (_) {}
     sleep(Duration(milliseconds: checkInterval));
     duration -= checkInterval;
-  } while (element == null && duration > 0);
-  return element;
+  } while (elements.isEmpty && duration > 0);
+  return elements.safeFirst;
 }
