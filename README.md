@@ -6,6 +6,8 @@ Spogit is Spotify playlists (and folders of playlists) over Git. Yeah this is pr
 
 The Spotify API does not expose folders in any way, shape, or form to the web API. Spotify also removed the desktop app API, and having each user make their own dev app is yucky. Spogit had to get creative in how it uses the API, by opening a chrome browser and has you log into Spotify, using the internal Web API with that token.
 
+An example of a repository generated from a Spotify folder of playlists: [Alt-Rock](https://github.com/RubbaBoy/Alt-Rock)
+
 ## Installing
 
 Installing Spogit is very straightforward, the only requirements is that you have Google Chrome installed. To install:
