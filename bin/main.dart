@@ -44,8 +44,8 @@ Future<void> main(List<String> args) async {
   }
 
   var path = access['path'].directory;
-  var cookies = [path, access['cookies']].file;
-  var chromedriver = [path, access['chromedriver']].file;
+  var cookies = [path, access['cookies']].fileRaw;
+  var chromedriver = [path, access['chromedriver']].fileRaw;
 
   if (!path.existsSync()) {
     log.info('Path does not exist!');
@@ -53,7 +53,7 @@ Future<void> main(List<String> args) async {
   }
 
   final spogit = await Spogit.createSpogit(
-      path, cookies, chromedriver, [path, 'cache'].file,
+      path, cookies, chromedriver, [path, 'cache'].fileRaw,
       treeDuration: access['treeDuration'].parseInt(),
       playlistDuration: access['playlistDuration'].parseInt());
   await spogit.start();
