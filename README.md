@@ -16,6 +16,10 @@ Installing Spogit is very straightforward, the only requirements is that you hav
 
 If the program stops for whatever reason, running the executable is the only thing you need to do to get it started again.
 
+If you're illiterate and/or want to see Spogit running on a clean machine, check out the YouTube Demo:
+
+[![Thumbnail](assets/Thumbnail.png)](https://www.youtube.com/watch?v=eIRy5j_zlPA)
+
 ## Commands
 
 Commands are executed in the currently running Spogit process. The help is available by typing `help` and pressing enter, giving a result like:
