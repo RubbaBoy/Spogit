@@ -169,10 +169,8 @@ extension NumUtil on int {
 
 extension PathUtils on List<dynamic> {
   String separatorFix([bool replaceSlashes = false]) {
-    var escaper = replaceSlashes ? escapeSlash : (x) => x;
-    return map((e) => (e is File || e is Directory ? e.path : e) as String)
+    return map((e) => (e is File || e is Directory ? e.path : escapeSlash(e)) as String)
         .where((str) => str.isNotEmpty)
-        .map(escaper)
         .join(separator);
   }
 

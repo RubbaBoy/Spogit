@@ -127,7 +127,7 @@ class LinkedPlaylist {
       BaseRevision baseRevision, List<String> elementIds)
       : cacheManager = spogit.cacheManager,
         driverAPI = spogit.driverAPI,
-        root = SpogitRoot(spogit, [spogitPath, name].directory,
+        root = SpogitRoot(spogit, [spogitPath, name].directoryRaw,
             creating: true, tracking: elementIds) {
     root.rootLocal.revision = baseRevision.revision;
 
