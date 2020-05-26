@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:Spogit/Spogit.dart';
 import 'package:Spogit/utility.dart';
 import 'package:args/args.dart';
@@ -17,12 +19,12 @@ Future<void> main(List<String> args) async {
       help: 'The path to store and listen to Spotify files');
   parser.addOption('cookies',
       abbr: 'c',
-      defaultsTo: '~/Spogit/cookies.json',
-      help: 'The location your Spotify cookies will be generated in');
+      defaultsTo: 'cookies.json',
+      help: 'The location your Spotify cookies will be generated in, relative to the --path');
   parser.addOption('chromedriver',
       abbr: 'd',
-      defaultsTo: '~/Spogit/chromedriver.exe',
-      help: 'Specify the location of your chromedriver executable');
+      defaultsTo: 'chromedriver${Platform.isWindows ? '.exe' : ''}',
+      help: 'Specify the location of your chromedriver executable, relative to the --path');
   parser.addOption('treeDuration',
       abbr: 't',
       defaultsTo: '4',
@@ -42,8 +44,8 @@ Future<void> main(List<String> args) async {
   }
 
   var path = access['path'].directory;
-  var cookies = access['cookies'].file;
-  var chromedriver = access['chromedriver'].file;
+  var cookies = [path, access['cookies']].file;
+  var chromedriver = [path, access['chromedriver']].file;
 
   if (!path.existsSync()) {
     log.info('Path does not exist!');
@@ -51,10 +53,10 @@ Future<void> main(List<String> args) async {
   }
 
   final spogit = await Spogit.createSpogit(
-      cookies, chromedriver, [path, 'cache'].file,
+      path, cookies, chromedriver, [path, 'cache'].file,
       treeDuration: access['treeDuration'].parseInt(),
       playlistDuration: access['playlistDuration'].parseInt());
-  await spogit.start(path);
+  await spogit.start();
 }
 
 void setupLogging() {

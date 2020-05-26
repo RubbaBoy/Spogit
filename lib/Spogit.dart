@@ -27,14 +27,15 @@ class Spogit {
   final CacheManager cacheManager;
   final IdResourceManager idResourceManager;
   final AlbumResourceManager albumResourceManager;
+  final Directory spogitPath;
 
   PlaylistManager get playlistManager => driverAPI?.playlistManager;
 
-  Spogit._(this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager,
+  Spogit._(this.spogitPath, this.gitHook, this.changeWatcher, this.driverAPI, this.cacheManager,
       this.idResourceManager, this.albumResourceManager);
 
-  static Future<Spogit> createSpogit(File cookiesFile, File chromedriverFile, File cacheFile, {int treeDuration = 2, int playlistDuration = 2}) async {
-    await [cacheFile.parent, '.spogit'].file.create(recursive: true);
+  static Future<Spogit> createSpogit(Directory spogitPath, File cookiesFile, File chromedriverFile, File cacheFile, {int treeDuration = 2, int playlistDuration = 2}) async {
+    await [spogitPath, '.spogit'].fileRaw.create(recursive: true);
 
     final cacheManager = CacheManager(cacheFile)
       ..registerType(CacheType.PLAYLIST_COVER,
@@ -54,19 +55,19 @@ class Spogit {
     final albumResourceManager =
         AlbumResourceManager(driverAPI.playlistManager, cacheManager);
 
-    return Spogit._(gitHook, changeWatcher, driverAPI, cacheManager,
+    return Spogit._(spogitPath, gitHook, changeWatcher, driverAPI, cacheManager,
         idResourceManager, albumResourceManager);
   }
 
-  Future<void> start(Directory path) async {
-    final manager = LocalManager(this, driverAPI, cacheManager, path);
+  Future<void> start() async {
+    final manager = LocalManager(this, driverAPI, cacheManager, spogitPath);
     final inputController = InputController(this, manager);
 
     await gitHook.listen();
     gitHook.postCheckout.stream.listen((data) async {
       var wd = data.workingDirectory;
 
-      if (directoryEquals(wd.parent, path)) {
+      if (directoryEquals(wd.parent, spogitPath)) {
         var foundLocal = manager.getPlaylist(wd);
         if (foundLocal == null) {
           log.info('Creating playlist at ${wd.path}');
@@ -86,7 +87,7 @@ class Spogit {
           await foundLocal.initLocal();
         }
       } else {
-        log.warning('Not a direct child in ${path.path}');
+        log.warning('Not a direct child in ${spogitPath.path}');
       }
     });
 
@@ -128,7 +129,7 @@ class Spogit {
       return res;
     });
 
-    inputController.start(path);
+    inputController.start(spogitPath);
   }
 
   bool directoryEquals(Directory one, Directory two) =>

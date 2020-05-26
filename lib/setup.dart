@@ -29,12 +29,12 @@ fi
     log.info('Creating and setting hooks...');
     try {
       var templateDir = await getTemplateDirectory();
-      var hooksDir = [templateDir, 'hooks'].directory;
+      var hooksDir = [templateDir, 'hooks'].directoryRaw;
 
       await hooksDir.create(recursive: true);
 
       for (var name in hooks.keys) {
-        var outFile = [hooksDir, name].file;
+        var outFile = [hooksDir, name].fileRaw;
         if (!(await outFile.exists())) {
           await outFile.create();
           hooks[name] >> outFile;
@@ -57,7 +57,7 @@ fi
     var html = (await gitCommand('--html-path')).directory.parent.parent;
 
     var share = getSimilarity([info, man, html]) ?? info;
-    return [share, 'git-core', 'templates'].directory;
+    return [share, 'git-core', 'templates'].directoryRaw;
   }
 
   T getSimilarity<T>(List<T> data, [int minEquals = 2]) {

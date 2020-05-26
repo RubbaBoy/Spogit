@@ -168,15 +168,29 @@ extension NumUtil on int {
 }
 
 extension PathUtils on List<dynamic> {
-  String get separatorFix =>
-      map((e) => (e is File || e is Directory ? e.path : e) as String)
-          .where((str) => str.isNotEmpty)
-          .map(escapeSlash)
-          .join(separator);
+  String separatorFix([bool replaceSlashes = false]) {
+    var escaper = replaceSlashes ? escapeSlash : (x) => x;
+    return map((e) => (e is File || e is Directory ? e.path : e) as String)
+        .where((str) => str.isNotEmpty)
+        .map(escaper)
+        .join(separator);
+  }
 
-  File get file => File(separatorFix);
+  /// Creates a [File] from the current path.
+  /// Replaces all slashes with the division symbol.
+  File get file => File(separatorFix(true));
 
-  Directory get directory => Directory(separatorFix);
+  /// Creates a [File] from the current path.
+  /// DOES NOT replace slashes with the division symbol.
+  File get fileRaw => File(separatorFix());
+
+  /// Creates a [Directory] from the current path.
+  /// Replaces all slashes with the division symbol.
+  Directory get directory => Directory(separatorFix(true));
+
+  /// Creates a [Directory] from the current path.
+  /// DOES NOT replace slashes with the division symbol.
+  Directory get directoryRaw => Directory(separatorFix());
 }
 
 extension ASCIIShit on int {

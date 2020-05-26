@@ -123,11 +123,11 @@ class LinkedPlaylist {
   /// Creates a [LinkedPlaylist] from a given [BaseRevision] and list of
   /// top-level Spotify folders/playlists as [elementIds]. This means that it
   /// should not be fed a child playlist or folder.
-  LinkedPlaylist.fromRemote(this.spogit, this.localManager, String name,
+  LinkedPlaylist.fromRemote(this.spogit, this.localManager, Directory spogitPath, String name,
       BaseRevision baseRevision, List<String> elementIds)
       : cacheManager = spogit.cacheManager,
         driverAPI = spogit.driverAPI,
-        root = SpogitRoot(spogit, '~/Spogit/$name'.directory,
+        root = SpogitRoot(spogit, [spogitPath, name].directory,
             creating: true, tracking: elementIds) {
     root.rootLocal.revision = baseRevision.revision;
 

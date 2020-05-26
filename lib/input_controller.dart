@@ -72,23 +72,30 @@ add-local "My Demo"
             break;
           }
 
-          var local = LinkedPlaylist.fromRemote(spogit, localManager, name,
-              await driverAPI.playlistManager.analyzeBaseRevision(), ids);
+          var local = LinkedPlaylist.fromRemote(
+              spogit,
+              localManager,
+              spogit.spogitPath,
+              name,
+              await driverAPI.playlistManager.analyzeBaseRevision(),
+              ids);
           localManager.addPlaylist(local);
           await local.initElement();
           break;
         case 'al':
         case 'add-local':
           if (args.length != 1) {
-            print('The arguments must be a single directory name as the Spogit child');
+            print(
+                'The arguments must be a single directory name as the Spogit child');
             print('Example usage:');
             print('\tadd-local "My Demo"');
             break;
           }
 
-          var addingPath = [path, args[0]].directory;
+          var addingPath = [path, args[0]].directoryRaw;
           print('Adding local repository ${addingPath.path}');
-          spogit.gitHook.postCheckout.add(PostCheckoutData('', '', false, addingPath));
+          spogit.gitHook.postCheckout
+              .add(PostCheckoutData('', '', false, addingPath));
           break;
         case 'status':
           for (var value in localManager.linkedPlaylists) {
