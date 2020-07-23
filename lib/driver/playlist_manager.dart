@@ -121,7 +121,7 @@ class PlaylistManager {
                   token: _requestManager.authToken)
               .send(),
           useBase: false)
-      .then((json) => AlbumFull.fromJson(json));
+      .then((json) => AlbumFull.fromJson(json ?? {}));
 
   /// Gets an album's tracks by its ID. If [all] is true, it will get all
   /// tracks. If false, it will only return the first 50.
@@ -143,7 +143,7 @@ class PlaylistManager {
   /// `https://spclient.wg.spotify.com/playlist/v2/user/USER_ID/rootlist/changes`
   Future<Map<String, dynamic>> movePlaylist(String moving,
       {String toGroup, int offset = 0, int absolutePosition}) async {
-    sleep(Duration(milliseconds: 250)); // TODO: Proper rate limiting system!!!
+    await awaitSleep(Duration(milliseconds: 250)); // TODO: Proper rate limiting system!!!
     return basedRequest((baseRevision) {
       var movingElement = baseRevision.getElement(moving);
 
@@ -256,7 +256,7 @@ class PlaylistManager {
   /// <br><br>See [Create a Playlist](https://developer.spotify.com/documentation/web-api/reference/playlists/create-playlist/)
   Future<Map<String, dynamic>> createPlaylist(String name,
       [String description = '']) async {
-    sleep(Duration(milliseconds: 250)); // TODO: Proper rate limiting system!!!
+    await awaitSleep(Duration(milliseconds: 250)); // TODO: Proper rate limiting system!!!
     return basedRequest(
         (_) => DriverRequest(
               uri: Uri.parse('$apiUrl/playlists'),

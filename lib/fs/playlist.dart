@@ -89,6 +89,8 @@ class SpogitRoot extends SpotifyContainer {
     return out;
   }
 
+  int getSongCount() => children.map((child) => child.getSongCount()).reduce((a, b) => a + b);
+
   @override
   String toString() {
     return 'SpogitRoot{root: $root, meta: $meta, coverImage: $coverImage, _playlists: $_children}';
@@ -200,6 +202,9 @@ class SpotifyPlaylist extends Mappable {
   }
 
   @override
+  int getSongCount() => songs.length;
+
+  @override
   Future<void> save() async {
     await super.save();
 
@@ -270,6 +275,9 @@ class SpotifyFolder extends Mappable with SpotifyContainer {
     readme = [root, 'README.md'].file;
   }
 
+  @override
+  int getSongCount() => children.map((child) => child.getSongCount()).reduce((a, b) => a + b);
+
   /// Folder image: https://rubbaboy.me/images/uuy0w5i
   /// Empty playlist image: https://rubbaboy.me/images/d4w3yqc
   @override
@@ -339,10 +347,10 @@ class SpotifySong {
 
   /// Creates a SpotifySong from a single track json element.
   SpotifySong.fromJson(this.spogit, PlaylistTrack playlistTrack)
-      : id = playlistTrack.track.id,
-        trackName = playlistTrack.track.name,
-        _album = playlistTrack.track.album {
-    albumId = _album.id;
+      : id = playlistTrack.track?.id,
+        trackName = playlistTrack.track?.name ?? 'Unknown',
+        _album = playlistTrack.track?.album {
+    albumId = _album?.id ?? '';
   }
 
   /// The [id] should be the parsed track ID, and the [artistName] is the full
@@ -373,13 +381,13 @@ class SpotifySong {
         albumMatch.group(2), songChunk.trim());
   }
 
-  FutureOr<String> toLine() async => await (() async {
+  FutureOr<String> toLine() async => id == null ? '' : await (() async {
         var fetchedAlbum = await album;
         return '''
-<img align="left" width="100" height="100" src="${fetchedAlbum.images[0].url}">
+<img align="left" width="100" height="100" src="${fetchedAlbum?.images?.safeFirst?.url}">
 
 ### [${await spogit.idResourceManager.getName(id, ResourceType.Track)}](https://open.spotify.com/go?uri=spotify:track:$id)
-[${fetchedAlbum.name}](https://open.spotify.com/go?uri=spotify:track:$albumId)
+[${fetchedAlbum?.name}](https://open.spotify.com/go?uri=spotify:album:$albumId)
 
 ---
 ''';
@@ -416,6 +424,8 @@ abstract class Mappable extends LocalStorage {
   String get spotifyId => _spotifyId ??= this['id'];
 
   set spotifyId(String id) => this['id'] = id;
+
+  int getSongCount();
 
   Future<void> save() async => saveFile();
 

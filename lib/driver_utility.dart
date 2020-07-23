@@ -11,7 +11,7 @@ Future<WebElement> getElement(WebDriver driver, By by,
       elements = await driver.findElements(by);
       if (elements.isNotEmpty) return elements.first;
     } catch (_) {}
-    sleep(Duration(milliseconds: checkInterval));
+    await awaitSleep(Duration(milliseconds: checkInterval));
     duration -= checkInterval;
   } while (elements.isEmpty && duration > 0);
   return elements.safeFirst;

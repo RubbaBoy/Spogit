@@ -2,22 +2,28 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:Spogit/Spogit.dart';
+import 'package:Spogit/change_watcher.dart';
 import 'package:Spogit/driver/driver_api.dart';
 import 'package:Spogit/driver/playlist_manager.dart';
 import 'package:Spogit/git_hook.dart';
 import 'package:Spogit/local_manager.dart';
 import 'package:Spogit/utility.dart';
+import 'package:logging/logging.dart';
 
 class InputController {
+  final log = Logger('InputController');
+
   final Spogit spogit;
   final DriverAPI driverAPI;
   final LocalManager localManager;
+  final ChangeWatcher changeWatcher;
 
   InputController(this.spogit, this.localManager)
-      : driverAPI = spogit.driverAPI;
+      : driverAPI = spogit.driverAPI,
+        changeWatcher = spogit.changeWatcher;
 
   void start(Directory path) {
-    print('Listening for commands...');
+    log.info('Listening for commands...');
     stdin.transform(utf8.decoder).listen((line) async {
       var split = line.splitQuotes();
 
@@ -56,7 +62,7 @@ add-local "My Demo"
             return;
           }
 
-          print('Adding remote!');
+          log.info('Adding remote!');
 
           var name = args.first;
 
@@ -68,9 +74,13 @@ add-local "My Demo"
           ids.removeWhere((id) => !baseIds.contains(id));
 
           if (ids.isEmpty) {
-            print('Could not perform that action as no IDs were top-level.');
+            log.warning('Could not perform that action as no IDs were top-level.');
             break;
           }
+
+          log.info('Beginning the linking...');
+
+          changeWatcher.lock();
 
           var local = LinkedPlaylist.fromRemote(
               spogit,
@@ -81,6 +91,12 @@ add-local "My Demo"
               ids);
           localManager.addPlaylist(local);
           await local.initElement();
+
+          changeWatcher.unlock();
+
+          log.info('Processed ${local.root.getSongCount()} songs');
+
+          log.info('Completed linking!');
           break;
         case 'al':
         case 'add-local':

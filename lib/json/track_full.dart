@@ -45,7 +45,7 @@ class TrackFull with Jsonable {
   static TrackFull jsonConverter(Map<String, dynamic> json) => json == null ? null : TrackFull.fromJson(json);
 
   TrackFull.fromJson(Map<String, dynamic> json) {
-    album = json['album'] != null ? AlbumSimplified.fromJson(json['album']) : null;
+    album = json['album'] != null ? AlbumSimplified.fromJson(json['album'] ?? {}) : null;
     if (json['artists'] != null) {
       artists = <Artists>[];
       json['artists'].forEach((v) {

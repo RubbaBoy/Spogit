@@ -28,7 +28,7 @@ class IdResourceManager {
   /// - Playlist
   /// - Folder
   Future<String> getName(String id, [ResourceType type]) =>
-      cacheManager.getOr<IdResource>(id, () async {
+      id == null ? 'null' : cacheManager.getOr<IdResource>(id, () async {
         type ??= getResourceType(id);
         var parsed = id.parseId;
         String name;

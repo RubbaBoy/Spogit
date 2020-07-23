@@ -46,7 +46,7 @@ class PlaylistFull extends PlaylistSimplified<Paging<PlaylistTrack>> with Jsonab
   PlaylistFull.fromJson(Map<String, dynamic> json)
       : description = json['description'],
         followers = json['followers'] != null
-            ? Followers.fromJson(json['followers'])
+            ? Followers.fromJson(json['followers'] ?? {})
             : null,
         super.fromJson(json);
 
@@ -92,9 +92,9 @@ class PlaylistTrack with Jsonable {
   PlaylistTrack.fromJson(Map<String, dynamic> json) {
     addedAt = json['added_at'];
     addedBy =
-        json['added_by'] != null ? Artists.fromJson(json['added_by']) : null;
+        json['added_by'] != null ? Artists.fromJson(json['added_by'] ?? {}) : null;
     isLocal = json['is_local'];
-    track = json['track'] != null ? TrackFull.fromJson(json['track']) : null;
+    track = json['track'] != null ? TrackFull.fromJson(json['track'] ?? {}) : null;
   }
 
   @override

@@ -32,6 +32,12 @@ void syncPeriodic(Duration duration, Function callback) {
   Timer(duration, () async => await syncPeriodic(duration, callback));
 }
 
+Future<void> awaitSleep(Duration duration) {
+  final completer = Completer<void>();
+  Timer(duration, () => completer.complete());
+  return completer.future;
+}
+
 String randomHex(int length) {
   var res = '';
   for (var i = 0; i < length / 2; i++) {

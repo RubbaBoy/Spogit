@@ -19,7 +19,7 @@ class Paging<T extends Jsonable> with Jsonable {
             ? list
             : list
                 ?.map(pagingConvert)
-                ?.toList() ?? const [])(List<Map<String, dynamic>>.from(json['items'])),
+                ?.toList() ?? const [])(List<Map<String, dynamic>>.from(json['items'] ?? {})),
         limit = json['limit'],
         next = json['next'],
         offset = json['offset'],

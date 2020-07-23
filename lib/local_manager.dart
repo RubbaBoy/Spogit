@@ -142,14 +142,18 @@ class LinkedPlaylist {
     elementIds.parseAll();
     for (var element in baseRevision.elements
         .where((element) => elementIds.contains(element.id))) {
-      if (element.type == ElementType.Playlist) {
-        elements.add(element);
-      } else if (element.type == ElementType.FolderStart) {
+      if (element.type == ElementType.FolderStart) {
         // Gets the elements starting from the start going over all children, and plus the end folder
         elements.addAll(baseRevision.elements
             .sublist(element.index, element.index + element.children + 1));
+      } else {
+        elements.add(element);
       }
     }
+
+    var playlistCount = elements.where((element) => element.type == ElementType.Playlist).length;
+
+    log.info('Processing $playlistCount playlists...');
   }
 
   /// Returns a list of root watching IDs
@@ -254,7 +258,16 @@ class LinkedPlaylist {
           ..imageUrl = localManager.getCoverUrl(
               id, playlistDetails.images?.safeFirst?.url)
           ..songs = List<SpotifySong>.from(playlistDetails?.tracks?.items
-                  ?.map((track) => SpotifySong.fromJson(spogit, track)) ??
+                  ?.map((track) {
+                    // TODO: Investigate
+                    var song = SpotifySong.fromJson(spogit, track);
+                    if (song.id == null) {
+                      print('id null from json');
+                      print('from id $id | $element');
+                      print(playlistDetails.toJson());
+                    }
+                    return song;
+                  }) ??
               const []);
       } else if (element.type == ElementType.FolderStart) {
         var replaced = root.replaceFolder(id);

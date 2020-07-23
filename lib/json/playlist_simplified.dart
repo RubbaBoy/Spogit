@@ -43,7 +43,7 @@ class PlaylistSimplified<T extends Jsonable> with Jsonable {
   PlaylistSimplified.fromJson(Map<String, dynamic> json) {
     collaborative = json['collaborative'];
     externalUrls = json['external_urls'] != null
-        ? ExternalUrls.fromJson(json['external_urls'])
+        ? ExternalUrls.fromJson(json['external_urls'] ?? {})
         : null;
     href = json['href'];
     id = json['id'];
@@ -54,17 +54,17 @@ class PlaylistSimplified<T extends Jsonable> with Jsonable {
       });
     }
     name = json['name'];
-    owner = json['owner'] != null ? Artists.fromJson(json['owner']) : null;
+    owner = json['owner'] != null ? Artists.fromJson(json['owner'] ?? {}) : null;
     public = json['public'];
     snapshotId = json['snapshot_id'];
 
     if (isSubtype<T, Paging>()) {
       tracks = (json['tracks'] != null
           ? Paging<PlaylistTrack>.fromJson(
-              json['tracks'], PlaylistTrack.jsonConverter)
+              json['tracks'] ?? {}, PlaylistTrack.jsonConverter)
           : null) as T;
     } else if (T == TracksObject) {
-      tracks = TracksObject.fromJson(json['tracks']) as T;
+      tracks = TracksObject.fromJson(json['tracks'] ?? {}) as T;
     }
 
     type = json['type'];

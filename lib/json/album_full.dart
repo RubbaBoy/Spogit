@@ -55,9 +55,9 @@ class AlbumFull extends AlbumSimplified {
     externalIds = json['external_ids'] != null
         ? ExternalIds.fromJson(ExternalType.UPC, json['external_ids'])
         : null;
-    genres = json['genres'].cast<String>();
+    genres = json['genres']?.cast<String>();
     popularity = json['popularity'];
-    tracks = Paging.fromJson(json['tracks'], TrackSimplified.jsonConverter);
+    tracks = Paging.fromJson(json['tracks'] ?? {}, TrackSimplified.jsonConverter);
   }
 
   @override

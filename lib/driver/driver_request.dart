@@ -48,17 +48,24 @@ class RequestManager {
     Future<void> tryShit() async {
       _driver.execute('''
 const authSocket = new WebSocket(`ws://localhost:6979`);
+window.aa = authSocket;
 constantMock = window.fetch;
-window.fetch = function() {
+authSocket.onopen = () => {
+    window.fetch = function () {
         if (arguments[0].includes('spotify.com')) {
+            console.log(arguments);
             authSocket.send(JSON.stringify({'type': 'http', 'value': arguments}));
             window.fetch = constantMock;
         }
-    return constantMock.apply(this, arguments)
-}
+        return constantMock.apply(this, arguments)
+    };
+};
     ''', []);
 
-      (await getElement(_driver, By.cssSelector('a[href="/collection"]')))
+      await awaitSleep(Duration(milliseconds: 500));
+
+      (await getElement(_driver, By.cssSelector('a[href="/collection"]'),
+              duration: 500))
           ?.click();
 
       if (_driver
@@ -66,6 +73,13 @@ window.fetch = function() {
                   'div[aria-label="Something went wrong"] button'))
               .isNotEmpty &&
           authToken == null) {
+        _driver.get('https://open.spotify.com/');
+        return tryShit();
+      }
+
+      await awaitSleep(Duration(milliseconds: 3000));
+
+      if (personalData == null) {
         _driver.get('https://open.spotify.com/');
         return tryShit();
       }

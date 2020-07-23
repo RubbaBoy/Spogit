@@ -122,6 +122,10 @@ class ChangeWatcher {
     }
 
     Timer.periodic(Duration(seconds: playlistDuration), (timer) async {
+      if (_lock) {
+        return;
+      }
+
       var snapshots = trimStuff(await driverAPI.playlistManager.getPlaylistSnapshots());
       if (allSnapshots.isEmpty) {
         allSnapshots.addAll(snapshots);
